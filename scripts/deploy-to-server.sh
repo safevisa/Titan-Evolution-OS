@@ -49,4 +49,4 @@ docker compose up -d
 docker compose ps
 EOS
 
-echo "Done. Point Nginx at 127.0.0.1:3000 (Next) and 127.0.0.1:8000 (API) using deploy/nginx-tokenply.conf"
+echo "Done. Point Nginx at 127.0.0.1:3001 (Next) and 127.0.0.1:8000 (API) using deploy/nginx-tokenply.conf"
