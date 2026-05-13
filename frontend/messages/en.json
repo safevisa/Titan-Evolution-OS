@@ -1,0 +1,48 @@
+{
+  "app": {
+    "name": "Titan Evolution OS",
+    "tagline": "Self-evolving digital workforce operating system",
+    "nav": {
+      "dashboard": "Dashboard",
+      "agents": "Agents",
+      "tasks": "Tasks",
+      "evolution": "Evolution",
+      "skills": "Skills",
+      "settings": "Settings"
+    },
+    "home": {
+      "phaseLabel": "Phase 0",
+      "phaseBody": "Infrastructure is wired: API, database migrations, and i18n-ready shell. Connect services and agents next.",
+      "apiStatus": "API base URL",
+      "notSet": "not configured",
+      "openDashboard": "Open dashboard"
+    },
+    "quickstart": {
+      "title": "Minimal chain (tenant → agent → task → queue)",
+      "tenantName": "Tenant name",
+      "createTenant": "Create tenant",
+      "agentName": "Agent name",
+      "role": "Role (e.g. hunter)",
+      "prompt": "System prompt",
+      "createAgent": "Create agent",
+      "taskType": "Task type",
+      "createTask": "Create task",
+      "enqueue": "Enqueue on Celery",
+      "llmTitle": "Optional LLM",
+      "llmMessage": "Message",
+      "llmSend": "Call /llm/complete",
+      "log": "Activity log"
+    },
+    "tasksPage": {
+      "title": "Task center",
+      "tenantFilter": "Filter by tenant UUID",
+      "refresh": "Refresh",
+      "empty": "No tasks for this filter.",
+      "type": "Type",
+      "status": "Status"
+    }
+  },
+  "common": {
+    "wip": "This area is scaffolded; feature work follows the roadmap."
+  }
+}

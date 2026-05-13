@@ -1,0 +1,48 @@
+{
+  "app": {
+    "name": "Titan Evolution OS",
+    "tagline": "自进化数字员工操作系统",
+    "nav": {
+      "dashboard": "主控台",
+      "agents": "数字员工",
+      "tasks": "任务中心",
+      "evolution": "进化控制台",
+      "skills": "技能图书馆",
+      "settings": "设置"
+    },
+    "home": {
+      "phaseLabel": "阶段 0",
+      "phaseBody": "基础设施已接通：API、数据库迁移与多语言壳层。下一步接入服务与各 Agent。",
+      "apiStatus": "API 基地址",
+      "notSet": "未配置",
+      "openDashboard": "进入主控台"
+    },
+    "quickstart": {
+      "title": "最小链路（租户 → 员工 → 任务 → 队列）",
+      "tenantName": "租户名称",
+      "createTenant": "创建租户",
+      "agentName": "Agent 名称",
+      "role": "岗位（如 hunter）",
+      "prompt": "系统提示词",
+      "createAgent": "创建 Agent",
+      "taskType": "任务类型",
+      "createTask": "创建任务",
+      "enqueue": "Celery 入队",
+      "llmTitle": "可选 LLM",
+      "llmMessage": "消息",
+      "llmSend": "调用 /llm/complete",
+      "log": "操作日志"
+    },
+    "tasksPage": {
+      "title": "任务中心",
+      "tenantFilter": "按租户 UUID 筛选",
+      "refresh": "刷新",
+      "empty": "当前筛选下没有任务。",
+      "type": "类型",
+      "status": "状态"
+    }
+  },
+  "common": {
+    "wip": "此区域已搭好骨架，功能将按路线图逐步实现。"
+  }
+}
