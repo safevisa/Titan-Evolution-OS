@@ -12,7 +12,36 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-app = FastAPI(title="Titan Evolution OS", version="0.1.0", lifespan=lifespan)
+_DESCRIPTION = """
+## Titan Evolution OS — API Reference
+
+Self-evolving digital workforce operating system. Create tenants, deploy AI agents,
+run tasks, and let the system automatically improve agent prompts over time.
+
+### Quick start
+1. `POST /api/v1/tenants` — create a tenant (set `auto_provision=true` for instant agents)
+2. `GET /api/v1/tenants` — list tenants and copy the tenant UUID
+3. `POST /api/v1/tasks` — create a task for one of the auto-provisioned agents
+4. `POST /api/v1/tasks/{id}/enqueue` — run the task via Celery
+5. `POST /api/v1/tasks/{id}/feedback` — rate the result (0–1 quality score)
+6. `GET /api/v1/evolution/status` — view KPI scores and trigger evolution
+
+### Authentication
+Currently open — JWT auth planned for Phase 5 production release.
+
+### Rate limits
+Enforced per tenant plan via Redis (tokens/min). Quota: starter 20K, growth 100K, enterprise 500K.
+"""
+
+app = FastAPI(
+    title="Titan Evolution OS",
+    version="1.0.0",
+    description=_DESCRIPTION,
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
+    lifespan=lifespan,
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[

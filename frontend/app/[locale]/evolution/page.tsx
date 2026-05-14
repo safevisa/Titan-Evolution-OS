@@ -1,7 +1,8 @@
 import { getDictionary } from "@/lib/i18n/get-dictionary";
+import { EvolutionConsole, type EvolutionLabels } from "@/components/EvolutionConsole";
 
 export default async function EvolutionPage({ params }: { params: { locale: string } }) {
-  const d = await getDictionary(params.locale);
-  const wip = (d.common as { wip: string }).wip;
-  return <p className="text-sm text-zinc-400">{wip}</p>;
+  const dict = await getDictionary(params.locale);
+  const app = dict.app as Record<string, unknown>;
+  return <EvolutionConsole labels={app.evolutionPage as EvolutionLabels} />;
 }

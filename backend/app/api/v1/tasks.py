@@ -1,6 +1,8 @@
-from uuid import UUID
+from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
@@ -8,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.domain import Task
+from app.models.domain import PerformanceLog, Task
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -30,17 +32,30 @@ class TaskRead(BaseModel):
     agent_id: UUID
     task_type: str = Field(serialization_alias="type")
     status: str
+    token_used: int = 0
+    duration_ms: Optional[int] = None
+    output: Optional[dict] = None
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+
+
+class FeedbackBody(BaseModel):
+    quality_score: float = Field(ge=0.0, le=1.0)
+    human_feedback: Optional[str] = None
 
 
 @router.get("", response_model=list[TaskRead])
 async def list_tasks(
     tenant_id: Optional[UUID] = None,
+    status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ) -> list[Task]:
     q = select(Task)
     if tenant_id is not None:
         q = q.where(Task.tenant_id == tenant_id)
-    res = await db.execute(q.order_by(Task.created_at.desc()))
+    if status is not None:
+        q = q.where(Task.status == status)
+    res = await db.execute(q.order_by(Task.created_at.desc()).limit(100))
     return list(res.scalars().all())
 
 
@@ -69,9 +84,49 @@ async def get_task(task_id: UUID, db: AsyncSession = Depends(get_db)) -> Task:
 @router.post("/{task_id}/enqueue")
 async def enqueue_task(task_id: UUID, db: AsyncSession = Depends(get_db)) -> dict:
     from app.workers.tasks import enqueue_agent_task
+    from app.models.domain import Tenant
+    from app.core.plan_limits import check_task_limit
 
     task = await db.get(Task, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="task not found")
+    if task.status not in ("pending", "failed"):
+        raise HTTPException(status_code=409, detail=f"task already {task.status}")
+
+    tenant = await db.get(Tenant, task.tenant_id)
+    if tenant is not None:
+        ok, msg = await check_task_limit(str(task.tenant_id), tenant.plan, db)
+        if not ok:
+            raise HTTPException(status_code=402, detail=msg)
+
     enqueue_agent_task.delay(str(task_id))
     return {"queued": True, "task_id": str(task_id)}
+
+
+@router.post("/{task_id}/feedback")
+async def submit_feedback(
+    task_id: UUID,
+    body: FeedbackBody,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    task = await db.get(Task, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="task not found")
+
+    res = await db.execute(
+        select(PerformanceLog).where(PerformanceLog.task_id == task_id).limit(1)
+    )
+    perf: PerformanceLog | None = res.scalars().first()
+    if perf is None:
+        perf = PerformanceLog(
+            tenant_id=task.tenant_id,
+            agent_id=task.agent_id,
+            task_id=task.id,
+            success_flag=task.status == "done",
+        )
+        db.add(perf)
+
+    perf.quality_score = body.quality_score
+    perf.human_feedback = body.human_feedback
+    await db.commit()
+    return {"ok": True, "quality_score": body.quality_score}

@@ -1,14 +1,12 @@
 import { notFound } from "next/navigation";
-
-import { AppNav, type NavLabels } from "@/components/AppNav";
 import { isLocale, locales } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
-import { Providers } from "../providers";
+import { AppSidebar, type SidebarLabels } from "@/components/AppSidebar";
 
 type AppDict = {
   name: string;
   tagline: string;
-  nav: NavLabels;
+  nav: SidebarLabels;
 };
 
 export function generateStaticParams() {
@@ -27,12 +25,14 @@ export default async function LocaleLayout({
   }
   const dict = await getDictionary(params.locale);
   const app = dict.app as AppDict;
+
   return (
-    <Providers>
-      <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100">
-        <AppNav locale={params.locale} title={app.name} nav={app.nav} />
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">{children}</main>
-      </div>
-    </Providers>
+    <div style={{ display: "flex", minHeight: "100vh", background: "#07090f", fontFamily: "'DM Sans','Helvetica Neue',sans-serif" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap'); * { box-sizing: border-box; } ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #2a2e3a; border-radius: 2px; }`}</style>
+      <AppSidebar locale={params.locale} labels={app.nav} />
+      <main style={{ flex: 1, padding: "32px 36px", overflowY: "auto", minWidth: 0 }}>
+        {children}
+      </main>
+    </div>
   );
 }

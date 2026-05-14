@@ -6,6 +6,7 @@ export type NavLabels = {
   tasks: string;
   evolution: string;
   skills: string;
+  billing: string;
   settings: string;
 };
 
@@ -25,6 +26,7 @@ export function AppNav({
     { href: `${p}/tasks`, label: nav.tasks },
     { href: `${p}/evolution`, label: nav.evolution },
     { href: `${p}/skills`, label: nav.skills },
+    { href: `${p}/billing`, label: nav.billing },
     { href: `${p}/settings`, label: nav.settings },
   ];
   return (

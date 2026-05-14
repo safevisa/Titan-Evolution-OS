@@ -1,36 +1,44 @@
-"""Apollo.io search — requires APOLLO_API_KEY."""
-
+"""Apollo.io people/company search — gracefully skips when key not configured."""
 from __future__ import annotations
-
-from typing import Any, Optional
 
 import httpx
 
 from app.core.config import settings
 
-APOLLO_BASE = "https://api.apollo.io/api/v1"
 
-
-async def apollo_search_people(
-    *,
-    q_keywords: Optional[str] = None,
-    person_titles: Optional[list[str]] = None,
-    page: int = 1,
-    per_page: int = 10,
-) -> dict[str, Any]:
+async def search_leads(criteria: dict) -> list[dict]:
+    """Returns list of leads from Apollo. Empty list if key not set or request fails."""
     if not settings.apollo_api_key:
-        raise RuntimeError("APOLLO_API_KEY is not configured")
-    payload: dict[str, Any] = {"page": page, "per_page": per_page}
-    if q_keywords:
-        payload["q_keywords"] = q_keywords
-    if person_titles:
-        payload["person_titles[]"] = person_titles
-    headers = {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache",
-        "X-Api-Key": settings.apollo_api_key,
+        return []
+
+    payload = {
+        "api_key": settings.apollo_api_key,
+        "q_organization_domains": criteria.get("domains", []),
+        "person_titles": criteria.get("titles", ["CEO", "Founder", "Head of Partnerships"]),
+        "organization_industry_tag_ids": criteria.get("industry_ids", []),
+        "page": 1,
+        "per_page": criteria.get("limit", 10),
     }
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        r = await client.post(f"{APOLLO_BASE}/mixed_people/search", json=payload, headers=headers)
-        r.raise_for_status()
-        return r.json()
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                "https://api.apollo.io/v1/mixed_people/search",
+                json=payload,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            people = data.get("people", [])
+            return [
+                {
+                    "company_name": p.get("organization", {}).get("name", ""),
+                    "contact_name": p.get("name", ""),
+                    "email": p.get("email", ""),
+                    "title": p.get("title", ""),
+                    "industry": p.get("organization", {}).get("industry", ""),
+                    "country": p.get("organization", {}).get("country", ""),
+                    "score": 0.7,
+                }
+                for p in people
+            ]
+    except Exception:
+        return []

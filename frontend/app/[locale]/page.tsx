@@ -9,13 +9,15 @@ type HomeDict = {
     apiStatus: string;
     notSet: string;
     openDashboard: string;
+    apiSameOrigin: string;
+    apiExplicit: string;
   };
 };
 
 export default async function HomePage({ params }: { params: { locale: string } }) {
   const dict = await getDictionary(params.locale);
   const app = dict.app as HomeDict;
-  const apiBase = process.env.NEXT_PUBLIC_API_URL;
+  const apiExplicit = (process.env.NEXT_PUBLIC_API_URL ?? "").trim();
 
   return (
     <div className="space-y-8">
@@ -29,8 +31,15 @@ export default async function HomePage({ params }: { params: { locale: string } 
         <dl className="mt-6 grid gap-2 text-sm text-zinc-400">
           <div className="flex flex-wrap gap-2">
             <dt className="text-zinc-500">{app.home.apiStatus}</dt>
-            <dd className="font-mono text-zinc-200">
-              {apiBase ?? <span className="text-zinc-500">{app.home.notSet}</span>}
+            <dd className="max-w-xl text-zinc-200">
+              {apiExplicit ? (
+                <>
+                  <span className="text-zinc-500">{app.home.apiExplicit}: </span>
+                  <span className="font-mono text-sm">{apiExplicit}</span>
+                </>
+              ) : (
+                <span>{app.home.apiSameOrigin}</span>
+              )}
             </dd>
           </div>
         </dl>

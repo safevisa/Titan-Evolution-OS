@@ -2,13 +2,13 @@ from uuid import UUID
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.domain import Agent, PromptVersion
+from app.models.domain import Agent, PromptVersion, Tenant
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -45,6 +45,14 @@ async def list_agents(
 
 @router.post("", response_model=AgentRead)
 async def create_agent(body: AgentCreate, db: AsyncSession = Depends(get_db)) -> Agent:
+    from app.core.plan_limits import check_agent_limit
+
+    tenant = await db.get(Tenant, body.tenant_id)
+    if tenant is not None:
+        ok, msg = await check_agent_limit(str(body.tenant_id), tenant.plan, db)
+        if not ok:
+            raise HTTPException(status_code=402, detail=msg)
+
     agent = Agent(
         tenant_id=body.tenant_id,
         name=body.name,

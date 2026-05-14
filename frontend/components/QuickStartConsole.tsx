@@ -1,6 +1,9 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+
+import { apiUrl } from "@/lib/api-origin";
+import { useAuth } from "@/hooks/useAuth";
 
 export type QuickStartLabels = {
   title: string;
@@ -17,15 +20,16 @@ export type QuickStartLabels = {
   llmMessage: string;
   llmSend: string;
   log: string;
+  apiTitle: string;
+  apiChecking: string;
+  apiOk: string;
+  apiFail: string;
 };
 
-function apiBase() {
-  return (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
-}
-
 export function QuickStartConsole({ labels, locale }: { labels: QuickStartLabels; locale: string }) {
+  const { tenantId: sessionTenantId } = useAuth();
   const [tenantName, setTenantName] = useState("Demo Tenant");
-  const [tenantId, setTenantId] = useState("");
+  const [tenantId, setTenantId] = useState(sessionTenantId ?? "");
   const [agentName, setAgentName] = useState("Hunter 1");
   const [role, setRole] = useState("hunter");
   const [prompt, setPrompt] = useState("You are a growth hunter focused on MENA fintech.");
@@ -34,15 +38,20 @@ export function QuickStartConsole({ labels, locale }: { labels: QuickStartLabels
   const [taskId, setTaskId] = useState("");
   const [llmMessage, setLlmMessage] = useState("Reply with one word: OK");
   const [log, setLog] = useState<string[]>([]);
+  const [apiLoop, setApiLoop] = useState<"checking" | "ok" | "fail">("checking");
+
+  useEffect(() => {
+    fetch(apiUrl("/api/v1/bootstrap"))
+      .then((r) => (r.ok ? setApiLoop("ok") : setApiLoop("fail")))
+      .catch(() => setApiLoop("fail"));
+  }, []);
 
   const pushLog = useCallback((line: string) => {
     setLog((prev) => [...prev.slice(-40), line]);
   }, []);
 
   const postJson = async (path: string, body: unknown) => {
-    const b = apiBase();
-    if (!b) throw new Error("NEXT_PUBLIC_API_URL missing");
-    const r = await fetch(`${b}${path}`, {
+    const r = await fetch(apiUrl(path), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -97,16 +106,14 @@ export function QuickStartConsole({ labels, locale }: { labels: QuickStartLabels
       pushLog("create task first");
       return;
     }
-    const b = apiBase();
-    const r = await fetch(`${b}/api/v1/tasks/${taskId}/enqueue`, { method: "POST" });
+    const r = await fetch(apiUrl(`/api/v1/tasks/${taskId}/enqueue`), { method: "POST" });
     const text = await r.text();
     if (!r.ok) throw new Error(`${r.status} ${text}`);
     pushLog(`enqueue ${text}`);
   };
 
   const onLlm = async () => {
-    const b = apiBase();
-    const r = await fetch(`${b}/api/v1/llm/complete`, {
+    const r = await fetch(apiUrl("/api/v1/llm/complete"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: llmMessage }),
@@ -122,6 +129,20 @@ export function QuickStartConsole({ labels, locale }: { labels: QuickStartLabels
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+        <span className="text-sm font-medium text-zinc-300">{labels.apiTitle}</span>
+        <span
+          className={
+            apiLoop === "ok"
+              ? "text-xs font-medium text-emerald-400"
+              : apiLoop === "fail"
+                ? "text-xs font-medium text-red-400"
+                : "text-xs text-zinc-500"
+          }
+        >
+          {apiLoop === "checking" ? labels.apiChecking : apiLoop === "ok" ? labels.apiOk : labels.apiFail}
+        </span>
+      </div>
       <h2 className="text-lg font-medium text-white">{labels.title}</h2>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <div className="space-y-2">

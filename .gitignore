@@ -29,6 +29,7 @@ token.pem
 
 # Local archives
 files.zip
+.tmp_cookies.txt
 
 # IDE
 .idea/

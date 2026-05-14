@@ -1,7 +1,8 @@
 import { getDictionary } from "@/lib/i18n/get-dictionary";
+import { SettingsConsole, type SettingsLabels } from "@/components/SettingsConsole";
 
 export default async function SettingsPage({ params }: { params: { locale: string } }) {
-  const d = await getDictionary(params.locale);
-  const wip = (d.common as { wip: string }).wip;
-  return <p className="text-sm text-zinc-400">{wip}</p>;
+  const dict = await getDictionary(params.locale);
+  const app = dict.app as Record<string, unknown>;
+  return <SettingsConsole labels={app.settingsPage as SettingsLabels} />;
 }

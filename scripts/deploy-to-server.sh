@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Deploy from your laptop to the Ubuntu host (Docker + Compose).
+# Build runs ON THE SERVER after rsync — no laptop IP is baked into images.
+# Keep PUBLIC_API_URL empty in server .env (same-origin /api via Nginx); never set it to a dev machine IP.
 # Usage:
 #   export DEPLOY_HOST=your.server.ip
 #   export DEPLOY_USER=ubuntu
@@ -28,11 +30,11 @@ rsync -az --delete \
   --exclude 'token.pem' \
   --exclude '.env' \
   --exclude '.env.local' \
-  -e "ssh -i \"$KEY\" -o StrictHostKeyChecking=accept-new" \
+  -e "ssh -i \"$KEY\" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30" \
   "$ROOT/" "${REMOTE}:~/titan-evolution-os-src/"
 
 echo "==> Remote: compose up (install Docker on the host first if needed)"
-ssh -i "$KEY" -o StrictHostKeyChecking=accept-new "$REMOTE" bash << 'EOS'
+ssh -i "$KEY" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 "$REMOTE" bash << 'EOS'
 set -euo pipefail
 cd ~/titan-evolution-os-src
 if ! command -v docker >/dev/null 2>&1; then
@@ -41,7 +43,7 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 if [[ ! -f .env ]]; then
   cp .env.example .env
-  echo "Created .env from .env.example — set POSTGRES_PASSWORD, OPENAI_API_KEY, PUBLIC_API_URL, etc."
+  echo "Created .env from .env.example — set POSTGRES_PASSWORD, OPENAI_API_KEY; leave PUBLIC_API_URL empty for same-origin /api."
 fi
 docker compose down --remove-orphans 2>/dev/null || true
 docker compose build
