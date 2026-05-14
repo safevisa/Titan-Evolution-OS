@@ -1,4 +1,4 @@
-"""Multi-step business goals: coordinator (manager) runs the tenant industry workflow DAG."""
+"""Multi-step business goals: industry workflow DAG with per-role active agents."""
 from __future__ import annotations
 
 import json
@@ -201,24 +201,13 @@ async def run_goal_pipeline(
     task: Task,
     coordinator_agent: Agent,
 ) -> tuple[dict[str, Any], int, bool, str | None]:
-    """Execute the tenant industry's primary workflow DAG; coordinator must be role=manager."""
+    """Execute the tenant industry's primary workflow DAG.
+
+    Stages are run by the first active agent per DAG role; ``coordinator_agent`` is recorded
+    on the task output for attribution (manager preferred at creation time, not required here).
+    """
     inp = task.input or {}
     goal = (inp.get("goal") or inp.get("criteria") or "").strip() or str(inp)
-
-    if coordinator_agent.role != "manager":
-        return (
-            {
-                "error": (
-                    "goal_pipeline requires the coordinator to be your Evolution Manager "
-                    "(role=manager). That manager then delegates each DAG stage to the "
-                    "matching functional digital employee on your team."
-                ),
-                "coordinator_role": coordinator_agent.role,
-            },
-            0,
-            False,
-            "coordinator_must_be_manager",
-        )
 
     tenant: Tenant | None = await db.get(Tenant, task.tenant_id)
     plugin_id = tenant.industry_plugin if tenant else "payment_fintech"

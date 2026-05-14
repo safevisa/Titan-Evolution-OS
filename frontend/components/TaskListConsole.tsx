@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiUrl } from "@/lib/api-origin";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -41,6 +41,12 @@ export type TaskListLabels = {
   workflowNameLabel?: string;
   workflowNamePlaceholder?: string;
   workflowNameHint?: string;
+  smartLaunchHint?: string;
+  smartLaunchProgress?: string;
+  smartLaunchButton?: string;
+  advancedManual?: string;
+  noAgentsHint?: string;
+  resolvedRouting?: string;
 };
 
 const C = {
@@ -123,22 +129,15 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId]);
 
-  const assignableAgents = useMemo(
-    () => (taskType === "goal_pipeline" ? agents.filter(a => a.role === "manager") : agents),
-    [taskType, agents],
-  );
-
   useEffect(() => {
-    if (taskType !== "goal_pipeline") return;
-    if (assignableAgents.length === 0) {
+    if (agents.length === 0) {
       setSelectedAgent("");
       return;
     }
-    const cur = agents.find(a => a.id === selectedAgent);
-    if (!cur || cur.role !== "manager") {
-      setSelectedAgent(assignableAgents[0].id);
+    if (!selectedAgent || !agents.some(a => a.id === selectedAgent)) {
+      setSelectedAgent(agents[0].id);
     }
-  }, [taskType, assignableAgents, agents, selectedAgent]);
+  }, [agents, selectedAgent]);
 
   const loadWorkflows = useCallback(async () => {
     if (!tenantId) return;
@@ -153,8 +152,8 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
   useEffect(() => { loadTasks(); }, [loadTasks]);
   useEffect(() => { loadAgents(); }, [loadAgents]);
   useEffect(() => {
-    if (taskType === "goal_pipeline") void loadWorkflows();
-  }, [taskType, loadWorkflows]);
+    if (tenantId) void loadWorkflows();
+  }, [tenantId, loadWorkflows]);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -173,6 +172,79 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
   const addLog = (icon: string, msg: string, color = C.textMid) => {
     const time = new Date().toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     setLiveLogs(prev => [...prev, { time, icon, msg, color }]);
+  };
+
+  const afterTaskCreated = async (task: TaskRow, runnerLabel: string) => {
+    addLog("✅", `Task created (ID: ${task.id.slice(0, 8)}…)`, C.green);
+    addLog("⚡", `Memory layer: retrieving relevant past experiences…`, C.purple);
+    const enqRes = await fetch(apiUrl(`/api/v1/tasks/${task.id}/enqueue`), { method: "POST" });
+    if (!enqRes.ok) {
+      addLog("❌", `Failed to enqueue: ${enqRes.status}`, C.red);
+      setLaunching(false);
+      return;
+    }
+    addLog("⏳", `${runnerLabel} is now running…`, C.amber);
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      const tRes = await fetch(apiUrl(`/api/v1/tasks/${task.id}`));
+      if (!tRes.ok) return;
+      const updated: TaskRow = await tRes.json();
+      if (updated.status === "done") {
+        clearInterval(poll);
+        addLog("✅", `Task completed! Duration: ${updated.duration_ms}ms · Tokens: ${updated.token_used}`, C.green);
+        setLiveLogs(prev => [...prev, { time: new Date().toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", second: "2-digit" }), icon: "🧠", msg: "Memory saved — this experience will improve future tasks", color: C.purple }]);
+        setGoal("");
+        setLaunching(false);
+        await loadTasks();
+      } else if (updated.status === "failed") {
+        clearInterval(poll);
+        addLog("❌", `Task failed. ${JSON.stringify(updated.output ?? {}).slice(0, 80)}`, C.red);
+        setLaunching(false);
+        await loadTasks();
+      } else if (attempts > 60) {
+        clearInterval(poll);
+        setLaunching(false);
+      }
+    }, 3000);
+  };
+
+  const launchSmartTask = async () => {
+    if (!tenantId || !goal.trim()) return;
+    setLaunching(true);
+    setLiveLogs([]);
+    addLog("🧭", labels.smartLaunchProgress ?? "Resolving task type and agent from your description…", C.accent);
+    try {
+      const wn = workflowNameOverride.trim();
+      const body: Record<string, unknown> = { tenant_id: tenantId, goal: goal.trim() };
+      if (wn) body.workflow_name = wn;
+      else if (workflows.length > 0) body.workflow_index = workflowIndex;
+
+      const createRes = await fetch(apiUrl("/api/v1/tasks/smart"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!createRes.ok) {
+        const errText = await createRes.text();
+        addLog("❌", `${createRes.status} ${errText.slice(0, 220)}`, C.red);
+        setLaunching(false);
+        return;
+      }
+      const data: { task: TaskRow; resolved: { task_type: string; agent_name: string; agent_role: string } } = await createRes.json();
+      const r = data.resolved;
+      const line = labels.resolvedRouting
+        ? labels.resolvedRouting
+            .replace("{type}", taskTypeLabel(r.task_type))
+            .replace("{name}", r.agent_name)
+            .replace("{role}", r.agent_role)
+        : `Matched: ${taskTypeLabel(r.task_type)} · ${r.agent_name} (${r.agent_role})`;
+      addLog("✨", line, C.purple);
+      await afterTaskCreated(data.task, r.agent_name);
+    } catch (e) {
+      addLog("❌", String(e), C.red);
+      setLaunching(false);
+    }
   };
 
   const launchTask = async () => {
@@ -203,35 +275,7 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
         return;
       }
       const task: TaskRow = await createRes.json();
-      addLog("✅", `Task created (ID: ${task.id.slice(0, 8)}…)`, C.green);
-      addLog("⚡", `Memory layer: retrieving relevant past experiences…`, C.purple);
-
-      const enqRes = await fetch(apiUrl(`/api/v1/tasks/${task.id}/enqueue`), { method: "POST" });
-      if (!enqRes.ok) { addLog("❌", `Failed to enqueue: ${enqRes.status}`, C.red); setLaunching(false); return; }
-      addLog("⏳", `${agent?.name ?? "Agent"} is now running…`, C.amber);
-
-      // Poll for completion
-      let attempts = 0;
-      const poll = setInterval(async () => {
-        attempts++;
-        const tRes = await fetch(apiUrl(`/api/v1/tasks/${task.id}`));
-        if (!tRes.ok) return;
-        const updated: TaskRow = await tRes.json();
-        if (updated.status === "done") {
-          clearInterval(poll);
-          addLog("✅", `Task completed! Duration: ${updated.duration_ms}ms · Tokens: ${updated.token_used}`, C.green);
-          setLiveLogs(prev => [...prev, { time: new Date().toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", second: "2-digit" }), icon: "🧠", msg: "Memory saved — this experience will improve future tasks", color: C.purple }]);
-          setGoal(""); setLaunching(false);
-          await loadTasks();
-        } else if (updated.status === "failed") {
-          clearInterval(poll);
-          addLog("❌", `Task failed. ${JSON.stringify(updated.output ?? {}).slice(0, 80)}`, C.red);
-          setLaunching(false);
-          await loadTasks();
-        } else if (attempts > 60) {
-          clearInterval(poll); setLaunching(false);
-        }
-      }, 3000);
+      await afterTaskCreated(task, agent?.name ?? "Agent");
     } catch (e) {
       addLog("❌", String(e), C.red);
       setLaunching(false);
@@ -272,68 +316,83 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24 }}>
           <h3 style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 20 }}>{labels.quickLaunch ?? "⚡ Quick launch"}</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div>
-              <label style={{ fontSize: 12, color: C.textMid, display: "block", marginBottom: 6 }}>{labels.taskTypeLabel ?? labels.type}</label>
-              <select value={taskType} onChange={e => setTaskType(e.target.value)} style={{ width: "100%", padding: "10px 14px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13 }}>
-                {TASK_TYPES.map(t => <option key={t} value={t}>{taskTypeLabel(t)}</option>)}
-              </select>
-              {taskType === "goal_pipeline" && labels.collaborativeHint && (
-                <p style={{ fontSize: 11, color: C.textDim, marginTop: 6, lineHeight: 1.45 }}>{labels.collaborativeHint}</p>
-              )}
-            </div>
-            {taskType === "goal_pipeline" && workflows.length > 0 && (
-              <div>
-                <label style={{ fontSize: 12, color: C.textMid, display: "block", marginBottom: 6 }}>{labels.workflowLabel ?? "Workflow template"}</label>
-                <select
-                  title={labels.workflowLabel ?? "Workflow template"}
-                  value={workflowIndex}
-                  onChange={e => setWorkflowIndex(Number(e.target.value))}
-                  style={{ width: "100%", padding: "10px 14px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13 }}
-                >
-                  {workflows.map(w => (
-                    <option key={w.index} value={w.index}>
-                      {w.name} · {w.node_count} {labels.workflowStepsSuffix ?? "steps"}
-                      {w.roles.length ? ` · ${w.roles.slice(0, 5).join(", ")}${w.roles.length > 5 ? "…" : ""}` : ""}
-                    </option>
-                  ))}
-                </select>
-                {labels.workflowRolesHint && (
-                  <p style={{ fontSize: 11, color: C.textDim, marginTop: 6, lineHeight: 1.45 }}>{labels.workflowRolesHint}</p>
-                )}
-              </div>
-            )}
-            {taskType === "goal_pipeline" && (
-              <div>
-                <label style={{ fontSize: 12, color: C.textMid, display: "block", marginBottom: 6 }}>{labels.workflowNameLabel ?? "Workflow name (optional)"}</label>
-                <input
-                  value={workflowNameOverride}
-                  onChange={e => setWorkflowNameOverride(e.target.value)}
-                  placeholder={labels.workflowNamePlaceholder ?? "Substring match on template name; overrides index"}
-                  title={labels.workflowNamePlaceholder ?? ""}
-                  style={{ width: "100%", padding: "11px 14px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, outline: "none" }}
-                  onFocus={e => { e.target.style.borderColor = C.accent; }}
-                  onBlur={e => { e.target.style.borderColor = C.border; }}
-                />
-                {labels.workflowNameHint && (
-                  <p style={{ fontSize: 11, color: C.textDim, marginTop: 6, lineHeight: 1.45 }}>{labels.workflowNameHint}</p>
-                )}
-              </div>
+            {labels.smartLaunchHint && (
+              <p style={{ fontSize: 12, color: C.textMid, lineHeight: 1.5, margin: 0 }}>{labels.smartLaunchHint}</p>
             )}
             <div>
               <label style={{ fontSize: 12, color: C.textMid, display: "block", marginBottom: 6 }}>{labels.goalLabel ?? "Goal"}</label>
-              <input value={goal} onChange={e => setGoal(e.target.value)} placeholder={labels.goalPlaceholder ?? "e.g. Find 50 fintech companies in MENA…"} style={{ width: "100%", padding: "11px 14px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, outline: "none" }} onFocus={e => e.target.style.borderColor = C.accent} onBlur={e => e.target.style.borderColor = C.border} />
+              <input value={goal} onChange={e => setGoal(e.target.value)} placeholder={labels.goalPlaceholder ?? "e.g. Find 50 fintech companies in MENA…"} style={{ width: "100%", padding: "11px 14px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, outline: "none" }} onFocus={e => { e.target.style.borderColor = C.accent; }} onBlur={e => { e.target.style.borderColor = C.border; }} />
             </div>
-            <div>
-              <label style={{ fontSize: 12, color: C.textMid, display: "block", marginBottom: 6 }}>{labels.assignLabel ?? "Assign to"}</label>
-              <select value={selectedAgent} onChange={e => setSelectedAgent(e.target.value)} style={{ width: "100%", padding: "10px 14px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13 }}>
-                {assignableAgents.length === 0
-                  ? <option value="">{taskType === "goal_pipeline" ? (labels.noManagerAgent ?? "No manager agent — reprovision tenant or pick another task type") : "No agents — create one first"}</option>
-                  : assignableAgents.map(a => <option key={a.id} value={a.id}>{a.name} ({a.role})</option>)}
-              </select>
-            </div>
-            <button onClick={launchTask} disabled={launching || !goal.trim() || !selectedAgent} style={{ width: "100%", padding: "13px", borderRadius: 9, border: "none", cursor: "pointer", fontWeight: 600, fontSize: 14, background: launching ? C.surfaceHigh : C.accent, color: launching ? C.textMid : "#fff", transition: "all 0.18s" }}>
-              {launching ? (labels.launching ?? "⏳ Running…") : (labels.launchButton ?? "🚀 Launch Task")}
+            <button type="button" onClick={launchSmartTask} disabled={launching || !goal.trim() || agents.length === 0} style={{ width: "100%", padding: "13px", borderRadius: 9, border: "none", cursor: agents.length === 0 ? "not-allowed" : "pointer", fontWeight: 600, fontSize: 14, background: launching || agents.length === 0 ? C.surfaceHigh : C.accent, color: launching || agents.length === 0 ? C.textMid : "#fff", transition: "all 0.18s" }}>
+              {launching ? (labels.launching ?? "⏳ Running…") : (labels.smartLaunchButton ?? "🧭 Smart launch")}
             </button>
+            {agents.length === 0 && labels.noAgentsHint && (
+              <p style={{ fontSize: 11, color: C.amber, margin: 0, lineHeight: 1.45 }}>{labels.noAgentsHint}</p>
+            )}
+
+            <details style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+              <summary style={{ cursor: "pointer", fontSize: 12, color: C.accent, fontWeight: 500 }}>{labels.advancedManual ?? "Advanced — manual task type & assignee"}</summary>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 14 }}>
+                <div>
+                  <label style={{ fontSize: 12, color: C.textMid, display: "block", marginBottom: 6 }}>{labels.taskTypeLabel ?? labels.type}</label>
+                  <select title={labels.taskTypeLabel ?? labels.type} value={taskType} onChange={e => setTaskType(e.target.value)} style={{ width: "100%", padding: "10px 14px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13 }}>
+                    {TASK_TYPES.map(t => <option key={t} value={t}>{taskTypeLabel(t)}</option>)}
+                  </select>
+                  {taskType === "goal_pipeline" && labels.collaborativeHint && (
+                    <p style={{ fontSize: 11, color: C.textDim, marginTop: 6, lineHeight: 1.45 }}>{labels.collaborativeHint}</p>
+                  )}
+                </div>
+                {taskType === "goal_pipeline" && workflows.length > 0 && (
+                  <div>
+                    <label style={{ fontSize: 12, color: C.textMid, display: "block", marginBottom: 6 }}>{labels.workflowLabel ?? "Workflow template"}</label>
+                    <select
+                      title={labels.workflowLabel ?? "Workflow template"}
+                      value={workflowIndex}
+                      onChange={e => setWorkflowIndex(Number(e.target.value))}
+                      style={{ width: "100%", padding: "10px 14px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13 }}
+                    >
+                      {workflows.map(w => (
+                        <option key={w.index} value={w.index}>
+                          {w.name} · {w.node_count} {labels.workflowStepsSuffix ?? "steps"}
+                          {w.roles.length ? ` · ${w.roles.slice(0, 5).join(", ")}${w.roles.length > 5 ? "…" : ""}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {labels.workflowRolesHint && (
+                      <p style={{ fontSize: 11, color: C.textDim, marginTop: 6, lineHeight: 1.45 }}>{labels.workflowRolesHint}</p>
+                    )}
+                  </div>
+                )}
+                {taskType === "goal_pipeline" && (
+                  <div>
+                    <label style={{ fontSize: 12, color: C.textMid, display: "block", marginBottom: 6 }}>{labels.workflowNameLabel ?? "Workflow name (optional)"}</label>
+                    <input
+                      value={workflowNameOverride}
+                      onChange={e => setWorkflowNameOverride(e.target.value)}
+                      placeholder={labels.workflowNamePlaceholder ?? "Substring match on template name; overrides index"}
+                      title={labels.workflowNamePlaceholder ?? ""}
+                      style={{ width: "100%", padding: "11px 14px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, outline: "none" }}
+                      onFocus={e => { e.target.style.borderColor = C.accent; }}
+                      onBlur={e => { e.target.style.borderColor = C.border; }}
+                    />
+                    {labels.workflowNameHint && (
+                      <p style={{ fontSize: 11, color: C.textDim, marginTop: 6, lineHeight: 1.45 }}>{labels.workflowNameHint}</p>
+                    )}
+                  </div>
+                )}
+                <div>
+                  <label style={{ fontSize: 12, color: C.textMid, display: "block", marginBottom: 6 }}>{labels.assignLabel ?? "Assign to"}</label>
+                  <select title={labels.assignLabel ?? "Assign to"} value={selectedAgent} onChange={e => setSelectedAgent(e.target.value)} style={{ width: "100%", padding: "10px 14px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13 }}>
+                    {agents.length === 0
+                      ? <option value="">{labels.noAgentsHint ?? "No agents — create one first"}</option>
+                      : agents.map(a => <option key={a.id} value={a.id}>{a.name} ({a.role})</option>)}
+                  </select>
+                </div>
+                <button type="button" onClick={launchTask} disabled={launching || !goal.trim() || !selectedAgent} style={{ width: "100%", padding: "13px", borderRadius: 9, border: `1px solid ${C.border}`, cursor: "pointer", fontWeight: 600, fontSize: 14, background: C.surfaceHigh, color: C.text, transition: "all 0.18s" }}>
+                  {launching ? (labels.launching ?? "⏳ Running…") : (labels.launchButton ?? "🚀 Manual launch")}
+                </button>
+              </div>
+            </details>
           </div>
         </div>
 
