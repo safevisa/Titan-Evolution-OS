@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiUrl } from "@/lib/api-origin";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -34,6 +34,13 @@ export type TaskListLabels = {
   submitFeedback: string;
   output: string;
   close: string;
+  noManagerAgent?: string;
+  workflowLabel?: string;
+  workflowStepsSuffix?: string;
+  workflowRolesHint?: string;
+  workflowNameLabel?: string;
+  workflowNamePlaceholder?: string;
+  workflowNameHint?: string;
 };
 
 const C = {
@@ -69,6 +76,8 @@ const TASK_TYPES = [
 const STATUS_ICON: Record<string, string> = { done: "✅", running: "⏳", failed: "❌", pending: "⏸" };
 const STATUS_COLOR: Record<string, string> = { done: C.green, running: C.accent, failed: C.red, pending: C.amber };
 
+type WorkflowTemplateRow = { index: number; name: string; node_count: number; roles: string[] };
+
 export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
   const { tenantId } = useAuth();
   const [statusFilter, setStatusFilter] = useState("all");
@@ -87,6 +96,9 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
   const [selectedAgent, setSelectedAgent] = useState("");
   const [launching, setLaunching] = useState(false);
   const [liveLogs, setLiveLogs] = useState<{ time: string; icon: string; msg: string; color: string }[]>([]);
+  const [workflows, setWorkflows] = useState<WorkflowTemplateRow[]>([]);
+  const [workflowIndex, setWorkflowIndex] = useState(0);
+  const [workflowNameOverride, setWorkflowNameOverride] = useState("");
   const logRef = useRef<HTMLDivElement>(null);
 
   const loadTasks = useCallback(async () => {
@@ -111,8 +123,38 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId]);
 
+  const assignableAgents = useMemo(
+    () => (taskType === "goal_pipeline" ? agents.filter(a => a.role === "manager") : agents),
+    [taskType, agents],
+  );
+
+  useEffect(() => {
+    if (taskType !== "goal_pipeline") return;
+    if (assignableAgents.length === 0) {
+      setSelectedAgent("");
+      return;
+    }
+    const cur = agents.find(a => a.id === selectedAgent);
+    if (!cur || cur.role !== "manager") {
+      setSelectedAgent(assignableAgents[0].id);
+    }
+  }, [taskType, assignableAgents, agents, selectedAgent]);
+
+  const loadWorkflows = useCallback(async () => {
+    if (!tenantId) return;
+    const res = await fetch(apiUrl(`/api/v1/tasks/workflow-templates?tenant_id=${tenantId}`));
+    if (res.ok) {
+      const data: WorkflowTemplateRow[] = await res.json();
+      setWorkflows(data);
+      setWorkflowIndex(0);
+    }
+  }, [tenantId]);
+
   useEffect(() => { loadTasks(); }, [loadTasks]);
   useEffect(() => { loadAgents(); }, [loadAgents]);
+  useEffect(() => {
+    if (taskType === "goal_pipeline") void loadWorkflows();
+  }, [taskType, loadWorkflows]);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -140,12 +182,26 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
     addLog("🚀", `Creating ${taskTypeLabel(taskType)}…`, C.accent);
     try {
       const agent = agents.find(a => a.id === selectedAgent);
+      const input: Record<string, unknown> = { goal: goal.trim(), criteria: goal.trim() };
+      if (taskType === "goal_pipeline") {
+        const wn = workflowNameOverride.trim();
+        if (wn) {
+          input.workflow_name = wn;
+        } else {
+          input.workflow_index = workflowIndex;
+        }
+      }
       const createRes = await fetch(apiUrl("/api/v1/tasks"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenant_id: tenantId, agent_id: selectedAgent, task_type: taskType, input: { goal: goal.trim(), criteria: goal.trim() } }),
+        body: JSON.stringify({ tenant_id: tenantId, agent_id: selectedAgent, task_type: taskType, input }),
       });
-      if (!createRes.ok) { addLog("❌", `Failed to create task: ${createRes.status}`, C.red); setLaunching(false); return; }
+      if (!createRes.ok) {
+        const errText = await createRes.text();
+        addLog("❌", `Failed to create task: ${createRes.status} ${errText.slice(0, 200)}`, C.red);
+        setLaunching(false);
+        return;
+      }
       const task: TaskRow = await createRes.json();
       addLog("✅", `Task created (ID: ${task.id.slice(0, 8)}…)`, C.green);
       addLog("⚡", `Memory layer: retrieving relevant past experiences…`, C.purple);
@@ -225,6 +281,44 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
                 <p style={{ fontSize: 11, color: C.textDim, marginTop: 6, lineHeight: 1.45 }}>{labels.collaborativeHint}</p>
               )}
             </div>
+            {taskType === "goal_pipeline" && workflows.length > 0 && (
+              <div>
+                <label style={{ fontSize: 12, color: C.textMid, display: "block", marginBottom: 6 }}>{labels.workflowLabel ?? "Workflow template"}</label>
+                <select
+                  title={labels.workflowLabel ?? "Workflow template"}
+                  value={workflowIndex}
+                  onChange={e => setWorkflowIndex(Number(e.target.value))}
+                  style={{ width: "100%", padding: "10px 14px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13 }}
+                >
+                  {workflows.map(w => (
+                    <option key={w.index} value={w.index}>
+                      {w.name} · {w.node_count} {labels.workflowStepsSuffix ?? "steps"}
+                      {w.roles.length ? ` · ${w.roles.slice(0, 5).join(", ")}${w.roles.length > 5 ? "…" : ""}` : ""}
+                    </option>
+                  ))}
+                </select>
+                {labels.workflowRolesHint && (
+                  <p style={{ fontSize: 11, color: C.textDim, marginTop: 6, lineHeight: 1.45 }}>{labels.workflowRolesHint}</p>
+                )}
+              </div>
+            )}
+            {taskType === "goal_pipeline" && (
+              <div>
+                <label style={{ fontSize: 12, color: C.textMid, display: "block", marginBottom: 6 }}>{labels.workflowNameLabel ?? "Workflow name (optional)"}</label>
+                <input
+                  value={workflowNameOverride}
+                  onChange={e => setWorkflowNameOverride(e.target.value)}
+                  placeholder={labels.workflowNamePlaceholder ?? "Substring match on template name; overrides index"}
+                  title={labels.workflowNamePlaceholder ?? ""}
+                  style={{ width: "100%", padding: "11px 14px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, outline: "none" }}
+                  onFocus={e => { e.target.style.borderColor = C.accent; }}
+                  onBlur={e => { e.target.style.borderColor = C.border; }}
+                />
+                {labels.workflowNameHint && (
+                  <p style={{ fontSize: 11, color: C.textDim, marginTop: 6, lineHeight: 1.45 }}>{labels.workflowNameHint}</p>
+                )}
+              </div>
+            )}
             <div>
               <label style={{ fontSize: 12, color: C.textMid, display: "block", marginBottom: 6 }}>{labels.goalLabel ?? "Goal"}</label>
               <input value={goal} onChange={e => setGoal(e.target.value)} placeholder={labels.goalPlaceholder ?? "e.g. Find 50 fintech companies in MENA…"} style={{ width: "100%", padding: "11px 14px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, outline: "none" }} onFocus={e => e.target.style.borderColor = C.accent} onBlur={e => e.target.style.borderColor = C.border} />
@@ -232,9 +326,9 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
             <div>
               <label style={{ fontSize: 12, color: C.textMid, display: "block", marginBottom: 6 }}>{labels.assignLabel ?? "Assign to"}</label>
               <select value={selectedAgent} onChange={e => setSelectedAgent(e.target.value)} style={{ width: "100%", padding: "10px 14px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13 }}>
-                {agents.length === 0
-                  ? <option value="">No agents — create one first</option>
-                  : agents.map(a => <option key={a.id} value={a.id}>{a.name} ({a.role})</option>)}
+                {assignableAgents.length === 0
+                  ? <option value="">{taskType === "goal_pipeline" ? (labels.noManagerAgent ?? "No manager agent — reprovision tenant or pick another task type") : "No agents — create one first"}</option>
+                  : assignableAgents.map(a => <option key={a.id} value={a.id}>{a.name} ({a.role})</option>)}
               </select>
             </div>
             <button onClick={launchTask} disabled={launching || !goal.trim() || !selectedAgent} style={{ width: "100%", padding: "13px", borderRadius: 9, border: "none", cursor: "pointer", fontWeight: 600, fontSize: 14, background: launching ? C.surfaceHigh : C.accent, color: launching ? C.textMid : "#fff", transition: "all 0.18s" }}>

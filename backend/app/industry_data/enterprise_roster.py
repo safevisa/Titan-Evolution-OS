@@ -73,6 +73,24 @@ def get_corporate_agent_configs() -> list["AgentConfig"]:
     return [AgentConfig(role=r, name=n, default_prompt=f"You are the {n} ({r}). {p}") for r, n, p in _AGENT_DEFS]
 
 
+def merge_corporate_agents_with_plugin_gtm(
+    gtm_overrides: list["AgentConfig"],
+) -> list["AgentConfig"]:
+    """Full enterprise roster; GTM-related roles use industry-plugin prompts and display names."""
+    ov = {c.role: c for c in gtm_overrides}
+    return [ov.get(c.role, c) for c in get_corporate_agent_configs()]
+
+
+def merge_corporate_and_plugin_skills(
+    plugin_specific: list["PluginSkillDoc"],
+) -> list["PluginSkillDoc"]:
+    """Corporate SOP library first, then plugin-only skills (dedupe by skill title)."""
+    corp = get_corporate_skills()
+    names = {s.name for s in corp}
+    extras = [s for s in plugin_specific if s.name not in names]
+    return [*corp, *extras]
+
+
 def _skill(name: str, body: str, roles: list[str]) -> "PluginSkillDoc":
     from app.industry_plugins.base_plugin import PluginSkillDoc
 

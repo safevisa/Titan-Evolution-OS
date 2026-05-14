@@ -1,6 +1,10 @@
 """SaaS B2B Growth plugin — PLG / outbound for B2B SaaS products."""
 from __future__ import annotations
 
+from app.industry_data.enterprise_roster import (
+    merge_corporate_agents_with_plugin_gtm,
+    merge_corporate_and_plugin_skills,
+)
 from app.industry_plugins.base_plugin import (
     AgentConfig,
     IndustryPlugin,
@@ -8,6 +12,64 @@ from app.industry_plugins.base_plugin import (
     PluginSkillDoc,
     WorkflowTemplate,
 )
+
+
+def _saas_b2b_gtm_overrides() -> list[AgentConfig]:
+    return [
+        AgentConfig(
+            role="hunter",
+            name="ICP Hunter",
+            default_prompt=(
+                "You are an ICP (Ideal Customer Profile) Hunter for a B2B SaaS product. "
+                "Identify companies that fit the ICP: right industry vertical, company size "
+                "(50-500 employees), and have a clear pain point the product solves. "
+                "Target: VP Engineering, Head of Ops, CTO, or Product Lead. "
+                "Return leads as JSON: [{company_name, contact_name, email, title, "
+                "industry, employee_count, pain_point, score, reason}]."
+            ),
+        ),
+        AgentConfig(
+            role="researcher",
+            name="Tech Stack Researcher",
+            default_prompt=(
+                "You are a Tech Stack & Competitor Researcher for B2B SaaS sales. "
+                "Given a company, research: current tools they use (from job listings, "
+                "LinkedIn, BuiltWith), competitor products they might already use, "
+                "and recent news indicating budget or growth signals. "
+                "Return structured JSON research brief."
+            ),
+        ),
+        AgentConfig(
+            role="outreach",
+            name="Trial Converter",
+            default_prompt=(
+                "You are a Trial Conversion specialist for B2B SaaS. "
+                "Write personalised emails that: reference the prospect's specific stack "
+                "or pain point, mention a relevant customer success story, and offer "
+                "a free trial or personalised demo. Keep under 100 words. "
+                "Return JSON: {subject, body}."
+            ),
+        ),
+        AgentConfig(
+            role="delivery",
+            name="Sales Brief Agent",
+            default_prompt=(
+                "Compile all prospect research into a concise sales brief for an AE. "
+                "Include: Company snapshot, tech stack, pain points, "
+                "recommended demo angle, potential objections, and suggested pricing tier."
+            ),
+        ),
+        AgentConfig(
+            role="manager",
+            name="Pipeline Manager",
+            default_prompt=(
+                "You coordinate hunter, researcher, outreach, and delivery for SaaS GTM. "
+                "Break goals into sequenced tasks with owners. "
+                "Return JSON: {\"plan\": [{\"step\": 1, \"role\": \"hunter\", "
+                "\"task_type\": \"icp_search\", \"description\": \"...\"}]}"
+            ),
+        ),
+    ]
 
 
 class SaasB2BPlugin(IndustryPlugin):
@@ -21,61 +83,7 @@ class SaasB2BPlugin(IndustryPlugin):
         return "SaaS B2B Growth"
 
     def get_agent_configs(self) -> list[AgentConfig]:
-        return [
-            AgentConfig(
-                role="hunter",
-                name="ICP Hunter",
-                default_prompt=(
-                    "You are an ICP (Ideal Customer Profile) Hunter for a B2B SaaS product. "
-                    "Identify companies that fit the ICP: right industry vertical, company size "
-                    "(50-500 employees), and have a clear pain point the product solves. "
-                    "Target: VP Engineering, Head of Ops, CTO, or Product Lead. "
-                    "Return leads as JSON: [{company_name, contact_name, email, title, "
-                    "industry, employee_count, pain_point, score, reason}]."
-                ),
-            ),
-            AgentConfig(
-                role="researcher",
-                name="Tech Stack Researcher",
-                default_prompt=(
-                    "You are a Tech Stack & Competitor Researcher for B2B SaaS sales. "
-                    "Given a company, research: current tools they use (from job listings, "
-                    "LinkedIn, BuiltWith), competitor products they might already use, "
-                    "and recent news indicating budget or growth signals. "
-                    "Return structured JSON research brief."
-                ),
-            ),
-            AgentConfig(
-                role="outreach",
-                name="Trial Converter",
-                default_prompt=(
-                    "You are a Trial Conversion specialist for B2B SaaS. "
-                    "Write personalised emails that: reference the prospect's specific stack "
-                    "or pain point, mention a relevant customer success story, and offer "
-                    "a free trial or personalised demo. Keep under 100 words. "
-                    "Return JSON: {subject, body}."
-                ),
-            ),
-            AgentConfig(
-                role="delivery",
-                name="Sales Brief Agent",
-                default_prompt=(
-                    "Compile all prospect research into a concise sales brief for an AE. "
-                    "Include: Company snapshot, tech stack, pain points, "
-                    "recommended demo angle, potential objections, and suggested pricing tier."
-                ),
-            ),
-            AgentConfig(
-                role="manager",
-                name="Pipeline Manager",
-                default_prompt=(
-                    "You coordinate hunter, researcher, outreach, and delivery for SaaS GTM. "
-                    "Break goals into sequenced tasks with owners. "
-                    "Return JSON: {\"plan\": [{\"step\": 1, \"role\": \"hunter\", "
-                    "\"task_type\": \"icp_search\", \"description\": \"...\"}]}"
-                ),
-            ),
-        ]
+        return merge_corporate_agents_with_plugin_gtm(_saas_b2b_gtm_overrides())
 
     def get_workflow_templates(self) -> list[WorkflowTemplate]:
         return [
@@ -98,7 +106,7 @@ class SaasB2BPlugin(IndustryPlugin):
         ]
 
     def get_default_skills(self) -> list[PluginSkillDoc]:
-        return [
+        return merge_corporate_and_plugin_skills([
             PluginSkillDoc(
                 name="ICP Qualification for B2B SaaS",
                 role_tags=["hunter"],
@@ -164,7 +172,7 @@ Every claim must trace back to a research bullet or lead field.
 Minimum 3 qualified replies or explicit learnings documented for evolution.
 """,
             ),
-        ]
+        ])
 
     def get_kpi_definition(self) -> KPIDefinition:
         return KPIDefinition(

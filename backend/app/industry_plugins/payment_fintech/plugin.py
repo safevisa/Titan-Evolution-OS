@@ -1,6 +1,10 @@
 """Payment & Fintech industry plugin — B2B payments / acquiring / fintech go-to-market."""
 from __future__ import annotations
 
+from app.industry_data.enterprise_roster import (
+    merge_corporate_agents_with_plugin_gtm,
+    merge_corporate_and_plugin_skills,
+)
 from app.industry_plugins.base_plugin import (
     AgentConfig,
     IndustryPlugin,
@@ -8,6 +12,69 @@ from app.industry_plugins.base_plugin import (
     PluginSkillDoc,
     WorkflowTemplate,
 )
+
+
+def _payment_fintech_gtm_overrides() -> list[AgentConfig]:
+    return [
+        AgentConfig(
+            role="hunter",
+            name="Growth Hunter",
+            default_prompt=(
+                "You are a Growth Hunter for a B2B payment / fintech company. "
+                "Your mission: identify merchants, platforms, or fintechs that need "
+                "payment processing, acquiring, or embedded finance. "
+                "Target: Head of Payments, CPO, CFO, or Founder at companies with "
+                "10-500 employees in MENA, SEA, or LatAm markets. "
+                "Return leads as JSON: [{company_name, contact_name, email, "
+                "title, industry, country, company_size, score, reason}]."
+            ),
+        ),
+        AgentConfig(
+            role="researcher",
+            name="License Researcher",
+            default_prompt=(
+                "You are a License & Compliance Researcher for fintech deals. "
+                "Given a company name and country, research: "
+                "1) What payment/financial licenses they hold (if any). "
+                "2) What licenses they need to operate in their target market. "
+                "3) Key regulatory contacts or consultants. "
+                "4) Estimated license acquisition timeline and cost. "
+                "Return a structured JSON research brief."
+            ),
+        ),
+        AgentConfig(
+            role="outreach",
+            name="Outreach Agent",
+            default_prompt=(
+                "You are a B2B outreach specialist for a payment infrastructure company. "
+                "Write concise, personalised cold emails (≤120 words). "
+                "Focus on: reducing payment failure rates, faster settlement, "
+                "local payment method support, or regulatory compliance. "
+                "Never use generic phrases like 'I hope this email finds you well'. "
+                "Return JSON: {subject, body}."
+            ),
+        ),
+        AgentConfig(
+            role="delivery",
+            name="Deal Summary Agent",
+            default_prompt=(
+                "You are a Deal Summary specialist. Compile all research and "
+                "outreach data into a professional deal brief in Markdown. "
+                "Include: Executive Summary, Company Profile, Opportunity Size, "
+                "Recommended Approach, Next Steps, Risk Factors."
+            ),
+        ),
+        AgentConfig(
+            role="manager",
+            name="Evolution Manager",
+            default_prompt=(
+                "You are an Evolution Manager coordinating hunter, researcher, outreach, "
+                "and delivery work. Break goals into ordered steps with clear owners. "
+                "Return JSON: {\"plan\": [{\"step\": 1, \"role\": \"hunter\", "
+                "\"task_type\": \"lead_search\", \"description\": \"...\"}]}"
+            ),
+        ),
+    ]
 
 
 class PaymentFintechPlugin(IndustryPlugin):
@@ -23,66 +90,7 @@ class PaymentFintechPlugin(IndustryPlugin):
     # ── Agent configurations ───────────────────────────────────────────────
 
     def get_agent_configs(self) -> list[AgentConfig]:
-        return [
-            AgentConfig(
-                role="hunter",
-                name="Growth Hunter",
-                default_prompt=(
-                    "You are a Growth Hunter for a B2B payment / fintech company. "
-                    "Your mission: identify merchants, platforms, or fintechs that need "
-                    "payment processing, acquiring, or embedded finance. "
-                    "Target: Head of Payments, CPO, CFO, or Founder at companies with "
-                    "10-500 employees in MENA, SEA, or LatAm markets. "
-                    "Return leads as JSON: [{company_name, contact_name, email, "
-                    "title, industry, country, company_size, score, reason}]."
-                ),
-            ),
-            AgentConfig(
-                role="researcher",
-                name="License Researcher",
-                default_prompt=(
-                    "You are a License & Compliance Researcher for fintech deals. "
-                    "Given a company name and country, research: "
-                    "1) What payment/financial licenses they hold (if any). "
-                    "2) What licenses they need to operate in their target market. "
-                    "3) Key regulatory contacts or consultants. "
-                    "4) Estimated license acquisition timeline and cost. "
-                    "Return a structured JSON research brief."
-                ),
-            ),
-            AgentConfig(
-                role="outreach",
-                name="Outreach Agent",
-                default_prompt=(
-                    "You are a B2B outreach specialist for a payment infrastructure company. "
-                    "Write concise, personalised cold emails (≤120 words). "
-                    "Focus on: reducing payment failure rates, faster settlement, "
-                    "local payment method support, or regulatory compliance. "
-                    "Never use generic phrases like 'I hope this email finds you well'. "
-                    "Return JSON: {subject, body}."
-                ),
-            ),
-            AgentConfig(
-                role="delivery",
-                name="Deal Summary Agent",
-                default_prompt=(
-                    "You are a Deal Summary specialist. Compile all research and "
-                    "outreach data into a professional deal brief in Markdown. "
-                    "Include: Executive Summary, Company Profile, Opportunity Size, "
-                    "Recommended Approach, Next Steps, Risk Factors."
-                ),
-            ),
-            AgentConfig(
-                role="manager",
-                name="Evolution Manager",
-                default_prompt=(
-                    "You are an Evolution Manager coordinating hunter, researcher, outreach, "
-                    "and delivery work. Break goals into ordered steps with clear owners. "
-                    "Return JSON: {\"plan\": [{\"step\": 1, \"role\": \"hunter\", "
-                    "\"task_type\": \"lead_search\", \"description\": \"...\"}]}"
-                ),
-            ),
-        ]
+        return merge_corporate_agents_with_plugin_gtm(_payment_fintech_gtm_overrides())
 
     # ── Workflow templates ─────────────────────────────────────────────────
 
@@ -119,7 +127,7 @@ class PaymentFintechPlugin(IndustryPlugin):
     # ── Default skill docs ─────────────────────────────────────────────────
 
     def get_default_skills(self) -> list[PluginSkillDoc]:
-        return [
+        return merge_corporate_and_plugin_skills([
             PluginSkillDoc(
                 name="MENA Payment Lead Qualification",
                 role_tags=["hunter"],
@@ -256,7 +264,7 @@ Crisp bullets; avoid marketing adjectives without proof points.
 - Escalate to human when compliance_flag appears in any stage.
 """,
             ),
-        ]
+        ])
 
     # ── KPI definition ─────────────────────────────────────────────────────
 

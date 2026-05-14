@@ -21,10 +21,11 @@ run tasks, and let the system automatically improve agent prompts over time.
 ### Quick start
 1. `POST /api/v1/tenants` — create a tenant (set `auto_provision=true` for instant agents)
 2. `GET /api/v1/tenants` — list tenants and copy the tenant UUID
-3. `POST /api/v1/tasks` — create a task for one of the auto-provisioned agents
-4. `POST /api/v1/tasks/{id}/enqueue` — run the task via Celery
-5. `POST /api/v1/tasks/{id}/feedback` — rate the result (0–1 quality score)
-6. `GET /api/v1/evolution/status` — view KPI scores and trigger evolution
+3. `POST /api/v1/tasks` — create a task for one of the auto-provisioned agents (goal_pipeline: coordinator must be `role=manager`, optional `input.workflow_index` / `input.workflow_name`)
+4. `GET /api/v1/tasks/workflow-templates?tenant_id=` — list DAG templates for that tenant’s industry plugin
+5. `POST /api/v1/tasks/{id}/enqueue` — run the task via Celery
+6. `POST /api/v1/tasks/{id}/feedback` — rate the result (0–1 quality score)
+7. `GET /api/v1/evolution/status` — view KPI scores and trigger evolution
 
 ### Authentication
 Currently open — JWT auth planned for Phase 5 production release.
