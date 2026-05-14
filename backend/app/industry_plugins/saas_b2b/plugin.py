@@ -4,6 +4,7 @@ from __future__ import annotations
 from app.industry_data.enterprise_roster import (
     merge_corporate_agents_with_plugin_gtm,
     merge_corporate_and_plugin_skills,
+    extend_plugin_workflows,
 )
 from app.industry_plugins.base_plugin import (
     AgentConfig,
@@ -33,10 +34,11 @@ def _saas_b2b_gtm_overrides() -> list[AgentConfig]:
             name="Tech Stack Researcher",
             default_prompt=(
                 "You are a Tech Stack & Competitor Researcher for B2B SaaS sales. "
-                "Given a company, research: current tools they use (from job listings, "
-                "LinkedIn, BuiltWith), competitor products they might already use, "
-                "and recent news indicating budget or growth signals. "
-                "Return structured JSON research brief."
+                "You receive a research focus (company name or short label) and context including "
+                "the user's full goal. When a company is named, research tools they may use, "
+                "competing products, and buying signals. When the goal is market or ICP oriented without "
+                "one company, synthesize stack patterns and evaluation criteria for that segment. "
+                "Return structured JSON; do not refuse solely because a single company name is missing."
             ),
         ),
         AgentConfig(
@@ -86,7 +88,8 @@ class SaasB2BPlugin(IndustryPlugin):
         return merge_corporate_agents_with_plugin_gtm(_saas_b2b_gtm_overrides())
 
     def get_workflow_templates(self) -> list[WorkflowTemplate]:
-        return [
+        return extend_plugin_workflows(
+            [
             WorkflowTemplate(
                 name="Outbound PLG Pipeline",
                 dag_config={
@@ -104,6 +107,7 @@ class SaasB2BPlugin(IndustryPlugin):
                 },
             ),
         ]
+        )
 
     def get_default_skills(self) -> list[PluginSkillDoc]:
         return merge_corporate_and_plugin_skills([

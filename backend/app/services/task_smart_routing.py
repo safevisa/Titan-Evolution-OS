@@ -1,12 +1,35 @@
 """Infer task type from natural-language goal and pick a coordinating agent."""
 from __future__ import annotations
 
+from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.domain import Agent
+
+# Single-task + collaborative pipeline (must match worker + API validators).
+VALID_SMART_TASK_TYPES: frozenset[str] = frozenset(
+    {
+        "goal_pipeline",
+        "lead_search",
+        "icp_search",
+        "partner_discovery",
+        "company_research",
+        "market_research",
+        "competitive_intel",
+        "tech_stack_research",
+        "email_write",
+        "trial_invite",
+        "follow_up_email",
+        "deal_summary",
+        "sales_brief",
+        "exec_one_pager",
+        "sprint_plan",
+        "risk_assessment",
+    }
+)
 
 
 def infer_task_type_from_goal(goal: str) -> str:
@@ -123,3 +146,39 @@ async def pick_agent_for_task(
             if a.role == role:
                 return a
     return agents[0]
+
+
+async def pick_smart_executor(
+    db: AsyncSession,
+    tenant_id: UUID,
+    task_type: str,
+    *,
+    forced_agent_id: Optional[UUID] = None,
+    coordinator_role_hint: Optional[str] = None,
+) -> Agent | None:
+    """Resolve primary task owner: forced id, then coordinator role for pipelines, else role order."""
+    if forced_agent_id is not None:
+        forced = await db.get(Agent, forced_agent_id)
+        if (
+            forced is not None
+            and forced.tenant_id == tenant_id
+            and forced.status == "active"
+        ):
+            return forced
+        return None
+
+    if task_type == "goal_pipeline" and coordinator_role_hint:
+        res = await db.execute(
+            select(Agent)
+            .where(
+                Agent.tenant_id == tenant_id,
+                Agent.status == "active",
+                Agent.role == coordinator_role_hint,
+            )
+            .order_by(Agent.created_at.asc())
+        )
+        hit = res.scalars().first()
+        if hit is not None:
+            return hit
+
+    return await pick_agent_for_task(db, tenant_id, task_type)

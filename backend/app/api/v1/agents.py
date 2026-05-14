@@ -13,6 +13,21 @@ from app.models.domain import Agent, PromptVersion, Tenant
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
+@router.get("/enterprise-catalog")
+async def enterprise_agent_catalog() -> dict:
+    """Read-only: full corporate roster (54 roles) and SOP skills shipped with Titan OS."""
+    from app.industry_data.enterprise_roster import get_corporate_agent_configs, get_corporate_skills
+
+    agents = get_corporate_agent_configs()
+    skills = get_corporate_skills()
+    return {
+        "agent_count": len(agents),
+        "skill_count": len(skills),
+        "agents": [{"role": c.role, "name": c.name} for c in agents],
+        "skills": [{"name": s.name, "role_tags": list(s.role_tags)} for s in skills],
+    }
+
+
 class AgentCreate(BaseModel):
     tenant_id: UUID
     name: str

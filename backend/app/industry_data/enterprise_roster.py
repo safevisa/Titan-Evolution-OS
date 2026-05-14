@@ -360,6 +360,17 @@ def get_default_gtm_workflow() -> list["WorkflowTemplate"]:
     ]
 
 
+def extend_plugin_workflows(local: list["WorkflowTemplate"]) -> list["WorkflowTemplate"]:
+    """Append enterprise default DAGs that are not already present by template name."""
+    names = {t.name for t in local}
+    merged = list(local)
+    for t in get_default_gtm_workflow():
+        if t.name not in names:
+            merged.append(t)
+            names.add(t.name)
+    return merged
+
+
 def default_sector_kpi(sector_id: str) -> "KPIDefinition":
     from app.industry_plugins.base_plugin import KPIDefinition
 

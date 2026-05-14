@@ -15,9 +15,14 @@ const ROLES = ["hunter", "outreach", "researcher", "delivery", "manager"];
 const ROLE_COLOR: Record<string, string> = { hunter: C.purple, outreach: C.accent, researcher: C.green, delivery: C.amber, manager: "#f472b6" };
 type AgentRow = { id: string; name: string; role: string; status: string; task_count: number; avg_score: number | null };
 
+function rosterAutosyncKey(tenantId: string) {
+  return `titan_roster_autosync_v2_${tenantId}`;
+}
+
 export function AgentsConsole() {
   const { tenantId } = useAuth();
   const [agents, setAgents] = useState<AgentRow[]>([]);
+  const [rosterTarget, setRosterTarget] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [createStep, setCreateStep] = useState(0);
@@ -26,14 +31,84 @@ export function AgentsConsole() {
   const [workStyle, setWorkStyle] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const load = useCallback(async () => {
     if (!tenantId) return;
     setLoading(true);
+    setLoadError("");
     try {
-      const res = await fetch(apiUrl(`/api/v1/analytics/agents?tenant_id=${tenantId}`));
-      if (res.ok) setAgents(await res.json());
-    } finally { setLoading(false); }
+      const catRes = await fetch(apiUrl("/api/v1/agents/enterprise-catalog"));
+      let expected = 54;
+      if (catRes.ok) {
+        const cat = (await catRes.json()) as { agent_count?: number };
+        if (typeof cat.agent_count === "number") {
+          expected = cat.agent_count;
+          setRosterTarget(expected);
+        }
+      }
+
+      const fetchAgentsRows = async (): Promise<AgentRow[]> => {
+        const res2 = await fetch(apiUrl(`/api/v1/agents?tenant_id=${tenantId}`));
+        if (!res2.ok) {
+          setLoadError(`Agents list HTTP ${res2.status}`);
+          return [];
+        }
+        const raw = (await res2.json()) as {
+          id: string;
+          name: string;
+          role: string;
+          status: string;
+        }[];
+        const base = raw.map((a) => ({
+          id: String(a.id),
+          name: a.name,
+          role: a.role,
+          status: a.status,
+          task_count: 0,
+          avg_score: null as number | null,
+        }));
+        const st = await fetch(apiUrl(`/api/v1/analytics/agents?tenant_id=${tenantId}`));
+        if (!st.ok) return base;
+        const stats: unknown = await st.json();
+        if (!Array.isArray(stats)) return base;
+        const byId = new Map(
+          (stats as { id: string; task_count?: number; avg_score?: number | null }[]).map((s) => [
+            s.id,
+            { task_count: s.task_count ?? 0, avg_score: s.avg_score ?? null },
+          ])
+        );
+        return base.map((a) => {
+          const x = byId.get(a.id);
+          return x ? { ...a, task_count: x.task_count, avg_score: x.avg_score } : a;
+        });
+      };
+
+      let rows = await fetchAgentsRows();
+      if (rows.length < expected && typeof window !== "undefined") {
+        const k = rosterAutosyncKey(tenantId);
+        if (!sessionStorage.getItem(k)) {
+          const syn = await fetch(apiUrl(`/api/v1/tenants/${tenantId}/sync-enterprise-roster`), {
+            method: "POST",
+          });
+          const synBody = (await syn.json().catch(() => ({}))) as { ok?: boolean; detail?: string };
+          if (syn.ok && synBody.ok !== false) {
+            sessionStorage.setItem(k, "1");
+            rows = await fetchAgentsRows();
+          } else {
+            setLoadError(
+              typeof synBody.detail === "string" ? synBody.detail : `Roster sync HTTP ${syn.status}`
+            );
+          }
+        }
+      }
+      setAgents(rows);
+    } catch {
+      setLoadError("Network error");
+      setAgents([]);
+    } finally {
+      setLoading(false);
+    }
   }, [tenantId]);
 
   useEffect(() => { load(); }, [load]);
@@ -65,12 +140,19 @@ export function AgentsConsole() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 700, color: C.text, marginBottom: 4 }}>Digital Team</h1>
-          <p style={{ fontSize: 14, color: C.textMid }}>{agents.length} agent{agents.length !== 1 ? "s" : ""}</p>
+          <p translate="no" style={{ fontSize: 14, color: C.textMid }}>
+            {loading ? "…" : `${agents.length} agent${agents.length !== 1 ? "s" : ""}`}
+            {rosterTarget != null && !loading ? ` · roster ${rosterTarget}` : ""}
+          </p>
         </div>
         <button onClick={() => { setShowCreate(true); setCreateStep(0); setError(""); }} style={{ padding: "10px 20px", borderRadius: 9, border: "none", cursor: "pointer", fontWeight: 600, fontSize: 13, background: C.accent, color: "#fff" }}>
           + Hire Agent
         </button>
       </div>
+
+      {loadError ? (
+        <p style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>{loadError}</p>
+      ) : null}
 
       {loading ? <p style={{ color: C.textDim, fontSize: 13 }}>Loading...</p> : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>

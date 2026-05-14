@@ -27,6 +27,8 @@ const NAV = [
   { id: "settings", label: "Settings", icon: "⊛" },
 ];
 
+const NAV_ADMIN = { id: "admin", label: "Admin", icon: "⚙" };
+
 export type SidebarLabels = {
   dashboard: string;
   agents: string;
@@ -35,6 +37,7 @@ export type SidebarLabels = {
   skills: string;
   billing: string;
   settings: string;
+  admin?: string;
 };
 
 export function AppSidebar({ locale, labels }: { locale: string; labels?: SidebarLabels }) {
@@ -46,9 +49,11 @@ export function AppSidebar({ locale, labels }: { locale: string; labels?: Sideba
     : user?.email?.[0]?.toUpperCase() ?? "?";
 
   const localizedLabel = (id: string) => {
-    if (!labels) return NAV.find(n => n.id === id)?.label ?? id;
-    return (labels as Record<string, string>)[id] ?? NAV.find(n => n.id === id)?.label ?? id;
+    if (!labels) return NAV.find(n => n.id === id)?.label ?? NAV_ADMIN.label;
+    return (labels as Record<string, string>)[id] ?? NAV.find(n => n.id === id)?.label ?? NAV_ADMIN.label;
   };
+
+  const navItems = isPlatformAdmin ? [...NAV, NAV_ADMIN] : NAV;
 
   return (
     <div style={{ width: 220, flexShrink: 0, background: C.surface, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0 }}>
@@ -65,7 +70,7 @@ export function AppSidebar({ locale, labels }: { locale: string; labels?: Sideba
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: "12px 10px", display: "flex", flexDirection: "column", gap: 2 }}>
-        {NAV.map(n => {
+        {navItems.map(n => {
           const href = `/${locale}/${n.id}`;
           const isActive = pathname.includes(`/${n.id}`);
           return (

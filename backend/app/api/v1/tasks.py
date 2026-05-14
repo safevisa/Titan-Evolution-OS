@@ -12,7 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.industry_plugins import get_plugin
 from app.models.domain import Agent, PerformanceLog, Task, Tenant
-from app.services.task_smart_routing import infer_task_type_from_goal, pick_agent_for_task
+from app.services.smart_launch_planner import plan_smart_launch
+from app.services.task_smart_routing import pick_smart_executor
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -33,6 +34,10 @@ class SmartTaskCreate(BaseModel):
     goal: str = Field(min_length=1, max_length=8000)
     workflow_name: Optional[str] = None
     workflow_index: Optional[int] = None
+    agent_id: Optional[UUID] = Field(
+        default=None,
+        description="Optional: force this active agent as primary executor (must belong to tenant).",
+    )
 
 
 class SmartTaskResolved(BaseModel):
@@ -40,6 +45,9 @@ class SmartTaskResolved(BaseModel):
     agent_id: UUID
     agent_name: str
     agent_role: str
+    plan_reasoning: Optional[str] = None
+    workflow_template: Optional[str] = None
+    workflow_index: Optional[int] = None
 
 
 class SmartTaskResponse(BaseModel):
@@ -170,25 +178,62 @@ async def create_task(body: TaskCreate, db: AsyncSession = Depends(get_db)) -> T
 
 @router.post("/smart", response_model=SmartTaskResponse)
 async def create_smart_task(body: SmartTaskCreate, db: AsyncSession = Depends(get_db)) -> SmartTaskResponse:
-    """Infer task type from ``goal`` and pick the best-matching active agent for this tenant."""
+    """Use the configured LLM to interpret ``goal``, then pick task type, workflow, and coordinator."""
     tenant_row = await db.get(Tenant, body.tenant_id)
     if tenant_row is None:
         raise HTTPException(status_code=404, detail="tenant not found")
 
-    task_type = infer_task_type_from_goal(body.goal)
-    agent = await pick_agent_for_task(db, body.tenant_id, task_type)
+    plan = await plan_smart_launch(
+        goal=body.goal.strip(),
+        tenant=tenant_row,
+        user_workflow_index=body.workflow_index,
+        user_workflow_name=body.workflow_name,
+    )
+    task_type = plan.task_type
+
+    if body.agent_id is not None:
+        forced = await db.get(Agent, body.agent_id)
+        if (
+            forced is None
+            or forced.tenant_id != body.tenant_id
+            or forced.status != "active"
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="agent_id is not an active digital employee for this tenant",
+            )
+        agent = forced
+    else:
+        agent = await pick_smart_executor(
+            db,
+            body.tenant_id,
+            task_type,
+            forced_agent_id=None,
+            coordinator_role_hint=plan.coordinator_role if task_type == "goal_pipeline" else None,
+        )
     if agent is None:
         raise HTTPException(
             status_code=400,
-            detail="no active digital employees for this tenant — add agents in settings first",
+            detail="no active digital employees for this tenant — sync enterprise roster or add agents",
         )
 
-    inp: dict = {"goal": body.goal.strip(), "criteria": body.goal.strip()}
+    inp: dict = {
+        "goal": body.goal.strip(),
+        "criteria": body.goal.strip(),
+        "smart_plan": {
+            "reasoning": plan.reasoning,
+            "workflow_index": plan.workflow_index,
+            "workflow_name": plan.workflow_name,
+            "coordinator_role": plan.coordinator_role,
+        },
+    }
+    wf_template_name: str | None = None
+    wf_idx_out: int | None = None
     if task_type == "goal_pipeline":
         plugin = get_plugin(tenant_row.industry_plugin)
         tmpl_list = plugin.get_workflow_templates() if plugin else []
         if tmpl_list:
-            wn = (body.workflow_name or "").strip()
+            wn = (body.workflow_name or plan.workflow_name or "").strip()
             if wn:
                 needle = wn.lower()
                 if not any(needle in t.name.lower() for t in tmpl_list):
@@ -198,10 +243,15 @@ async def create_smart_task(body: SmartTaskCreate, db: AsyncSession = Depends(ge
                         detail=f"workflow_name matched no template. Available: {names}",
                     )
                 inp["workflow_name"] = wn
+                for i, t in enumerate(tmpl_list):
+                    if needle in t.name.lower():
+                        wf_template_name = t.name
+                        wf_idx_out = i
+                        break
             else:
-                wi = 0 if body.workflow_index is None else body.workflow_index
+                wi = body.workflow_index if body.workflow_index is not None else plan.workflow_index
                 try:
-                    idx = int(wi)
+                    idx = int(wi) if wi is not None else 0
                 except (TypeError, ValueError):
                     idx = 0
                 if idx < 0 or idx >= len(tmpl_list):
@@ -210,6 +260,8 @@ async def create_smart_task(body: SmartTaskCreate, db: AsyncSession = Depends(ge
                         detail=f"workflow_index must be 0..{len(tmpl_list) - 1} for this tenant industry",
                     )
                 inp["workflow_index"] = idx
+                wf_template_name = tmpl_list[idx].name
+                wf_idx_out = idx
 
     task = Task(
         tenant_id=body.tenant_id,
@@ -227,6 +279,9 @@ async def create_smart_task(body: SmartTaskCreate, db: AsyncSession = Depends(ge
             agent_id=agent.id,
             agent_name=agent.name,
             agent_role=agent.role,
+            plan_reasoning=plan.reasoning,
+            workflow_template=wf_template_name,
+            workflow_index=wf_idx_out,
         ),
     )
 

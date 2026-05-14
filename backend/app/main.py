@@ -21,11 +21,15 @@ run tasks, and let the system automatically improve agent prompts over time.
 ### Quick start
 1. `POST /api/v1/tenants` — create a tenant (set `auto_provision=true` for instant agents)
 2. `GET /api/v1/tenants` — list tenants and copy the tenant UUID
-3. `POST /api/v1/tasks` — create a task for one of the auto-provisioned agents (goal_pipeline: coordinator must be `role=manager`, optional `input.workflow_index` / `input.workflow_name`)
-4. `GET /api/v1/tasks/workflow-templates?tenant_id=` — list DAG templates for that tenant’s industry plugin
-5. `POST /api/v1/tasks/{id}/enqueue` — run the task via Celery
-6. `POST /api/v1/tasks/{id}/feedback` — rate the result (0–1 quality score)
-7. `GET /api/v1/evolution/status` — view KPI scores and trigger evolution
+3. `POST /api/v1/tasks/smart` — LLM infers task type + workflow; then enqueue (goal_pipeline runs the DAG with multiple agents)
+4. `POST /api/v1/tenants/{tenant_id}/sync-enterprise-roster` — add missing roles from the 54-role catalog + skills
+5. `GET /api/v1/agents/enterprise-catalog` — read-only list of built-in roles and skill tags
+6. `GET /api/v1/tasks/workflow-templates?tenant_id=` — list DAG templates for that tenant’s industry plugin
+7. `POST /api/v1/tasks/{id}/enqueue` — run the task via Celery
+8. `POST /api/v1/tasks/{id}/feedback` — rate the result (0–1 quality score)
+9. `GET /api/v1/evolution/status` — view KPI scores and trigger evolution
+10. `POST /api/v1/admin/sync-all-enterprise-rosters` — bulk roster sync (requires `X-Titan-Admin-Key` = `TITAN_ADMIN_API_KEY` on the API server)
+11. `GET /api/v1/admin/tenants-overview` — tenant list for operators (same header)
 
 ### Authentication
 Currently open — JWT auth planned for Phase 5 production release.

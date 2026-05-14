@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     apollo_api_key: Optional[str] = None
     resend_api_key: Optional[str] = None
     db_echo: bool = False
+    # Shared secret for POST /api/v1/admin/* (must match frontend server env TITAN_ADMIN_API_KEY).
+    titan_admin_api_key: Optional[str] = None
 
 
 settings = Settings()

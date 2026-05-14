@@ -6,12 +6,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.industry_plugins import get_plugin, list_plugins
 from app.models.domain import Agent, SkillDoc, Tenant
+from app.services.enterprise_roster_sync import sync_tenant_enterprise_roster
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
 
@@ -188,6 +189,20 @@ async def create_tenant(
         agents_created=agents_created,
         skills_seeded=skills_seeded,
     )
+
+
+@router.post("/{tenant_id}/sync-enterprise-roster")
+async def sync_enterprise_roster(
+    tenant_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Ensure all plugin-defined corporate roles exist (54) with skills; reactivate or add missing rows."""
+    out = await sync_tenant_enterprise_roster(db, tenant_id)
+    if out.get("detail") == "tenant not found":
+        raise HTTPException(status_code=404, detail="tenant not found")
+    if out.get("detail") == "tenant has unknown industry_plugin":
+        raise HTTPException(status_code=400, detail="tenant has unknown industry_plugin")
+    return out
 
 
 @router.get("/{tenant_id}/quota")

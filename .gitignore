@@ -30,6 +30,7 @@ token.pem
 # Local archives
 files.zip
 .tmp_cookies.txt
+*.zip
 
 # IDE
 .idea/

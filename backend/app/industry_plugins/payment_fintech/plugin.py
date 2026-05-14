@@ -4,6 +4,7 @@ from __future__ import annotations
 from app.industry_data.enterprise_roster import (
     merge_corporate_agents_with_plugin_gtm,
     merge_corporate_and_plugin_skills,
+    extend_plugin_workflows,
 )
 from app.industry_plugins.base_plugin import (
     AgentConfig,
@@ -34,12 +35,14 @@ def _payment_fintech_gtm_overrides() -> list[AgentConfig]:
             name="License Researcher",
             default_prompt=(
                 "You are a License & Compliance Researcher for fintech deals. "
-                "Given a company name and country, research: "
-                "1) What payment/financial licenses they hold (if any). "
-                "2) What licenses they need to operate in their target market. "
-                "3) Key regulatory contacts or consultants. "
-                "4) Estimated license acquisition timeline and cost. "
-                "Return a structured JSON research brief."
+                "You receive a research focus (company name or short market/sector label) plus "
+                "context that may include the user's full natural-language goal and inferred region. "
+                "When a specific company is clear, cover: (1) licenses they may hold, "
+                "(2) licenses needed for their target market, (3) regulatory contacts or consultants, "
+                "(4) rough timeline and cost bands. "
+                "When no single company is named but the goal names a region or sector (e.g. MENA payments), "
+                "provide jurisdiction-relevant licensing frameworks, typical PSP/EMI paths, and practical next steps. "
+                "Return structured JSON; avoid empty 'unknown company' refusal when the goal is specific enough."
             ),
         ),
         AgentConfig(
@@ -95,7 +98,8 @@ class PaymentFintechPlugin(IndustryPlugin):
     # ── Workflow templates ─────────────────────────────────────────────────
 
     def get_workflow_templates(self) -> list[WorkflowTemplate]:
-        return [
+        return extend_plugin_workflows(
+            [
             WorkflowTemplate(
                 name="Full GTM Pipeline",
                 dag_config={
@@ -123,6 +127,7 @@ class PaymentFintechPlugin(IndustryPlugin):
                 },
             ),
         ]
+        )
 
     # ── Default skill docs ─────────────────────────────────────────────────
 

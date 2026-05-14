@@ -75,6 +75,7 @@ services:
       LITELLM_DEFAULT_MODEL: ${LITELLM_DEFAULT_MODEL:-deepseek/deepseek-v4-pro}
       APOLLO_API_KEY: ${APOLLO_API_KEY:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
+      TITAN_ADMIN_API_KEY: ${TITAN_ADMIN_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,6 +124,7 @@ services:
       LITELLM_DEFAULT_MODEL: ${LITELLM_DEFAULT_MODEL:-deepseek/deepseek-v4-pro}
       APOLLO_API_KEY: ${APOLLO_API_KEY:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
+      TITAN_ADMIN_API_KEY: ${TITAN_ADMIN_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -147,6 +149,7 @@ services:
       AUTH_TRUST_HOST: "true"
       BACKEND_INTERNAL_URL: http://backend:8000
       TITAN_ADMIN_EMAILS: ${TITAN_ADMIN_EMAILS:-}
+      TITAN_ADMIN_API_KEY: ${TITAN_ADMIN_API_KEY:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
     depends_on:

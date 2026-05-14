@@ -47,6 +47,24 @@ export type TaskListLabels = {
   advancedManual?: string;
   noAgentsHint?: string;
   resolvedRouting?: string;
+  /** Smart launch: optional primary executor (empty = auto). */
+  smartPrimaryAgentLabel?: string;
+  smartPrimaryAgentAuto?: string;
+  /** Task history table headers */
+  historyColTaskType?: string;
+  historyColTime?: string;
+  historyColAgent?: string;
+  historyColTokens?: string;
+  historyColDuration?: string;
+  historyColStatus?: string;
+  historyColActions?: string;
+  historyEmpty?: string;
+  historyAgentDash?: string;
+  outputTitleTemplate?: string;
+  viewOutput?: string;
+  syncRosterButton?: string;
+  syncRosterRunning?: string;
+  syncRosterDone?: string;
 };
 
 const C = {
@@ -58,8 +76,14 @@ const C = {
 
 type AgentRow = { id: string; name: string; role: string };
 type TaskRow = {
-  id: string; type: string; status: string; token_used: number;
-  duration_ms: number | null; output: Record<string, unknown> | null; created_at: string;
+  id: string;
+  agent_id: string;
+  type: string;
+  status: string;
+  token_used: number;
+  duration_ms: number | null;
+  output: Record<string, unknown> | null;
+  created_at: string;
 };
 
 const TASK_TYPES = [
@@ -101,6 +125,7 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
   const [goal, setGoal] = useState("");
   const [selectedAgent, setSelectedAgent] = useState("");
   const [launching, setLaunching] = useState(false);
+  const [smartExecutorId, setSmartExecutorId] = useState("");
   const [liveLogs, setLiveLogs] = useState<{ time: string; icon: string; msg: string; color: string }[]>([]);
   const [workflows, setWorkflows] = useState<WorkflowTemplateRow[]>([]);
   const [workflowIndex, setWorkflowIndex] = useState(0);
@@ -169,6 +194,16 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
 
   const taskTypeLabel = (t: string) => labels.taskTypeLabels?.[t] ?? t.replace(/_/g, " ");
 
+  const agentDisplayName = useCallback(
+    (agentId: string | undefined) => {
+      if (!agentId) return labels.historyAgentDash ?? "—";
+      const a = agents.find(x => x.id === agentId);
+      if (a) return `${a.name} (${a.role})`;
+      return `${agentId.slice(0, 8)}…`;
+    },
+    [agents, labels.historyAgentDash],
+  );
+
   const addLog = (icon: string, msg: string, color = C.textMid) => {
     const time = new Date().toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     setLiveLogs(prev => [...prev, { time, icon, msg, color }]);
@@ -209,6 +244,29 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
     }, 3000);
   };
 
+  const syncEnterpriseRoster = async () => {
+    if (!tenantId) return;
+    addLog("📦", labels.syncRosterRunning ?? "Syncing enterprise roster (54 roles + skills)…", C.accent);
+    try {
+      const res = await fetch(apiUrl(`/api/v1/tenants/${tenantId}/sync-enterprise-roster`), { method: "POST" });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        addLog("❌", `${res.status} ${JSON.stringify(j).slice(0, 200)}`, C.red);
+        return;
+      }
+      const msg = labels.syncRosterDone
+        ? labels.syncRosterDone
+            .replace("{a}", String(j.agents_added ?? 0))
+            .replace("{r}", String(j.agents_reactivated ?? 0))
+            .replace("{s}", String(j.skills_added ?? 0))
+        : `Roster sync: +${j.agents_added ?? 0} agents, reactivated ${j.agents_reactivated ?? 0}, +${j.skills_added ?? 0} skills`;
+      addLog("✅", msg, C.green);
+      await loadAgents();
+    } catch (e) {
+      addLog("❌", String(e), C.red);
+    }
+  };
+
   const launchSmartTask = async () => {
     if (!tenantId || !goal.trim()) return;
     setLaunching(true);
@@ -219,6 +277,7 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
       const body: Record<string, unknown> = { tenant_id: tenantId, goal: goal.trim() };
       if (wn) body.workflow_name = wn;
       else if (workflows.length > 0) body.workflow_index = workflowIndex;
+      if (smartExecutorId) body.agent_id = smartExecutorId;
 
       const createRes = await fetch(apiUrl("/api/v1/tasks/smart"), {
         method: "POST",
@@ -231,8 +290,27 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
         setLaunching(false);
         return;
       }
-      const data: { task: TaskRow; resolved: { task_type: string; agent_name: string; agent_role: string } } = await createRes.json();
+      const data: {
+        task: TaskRow;
+        resolved: {
+          task_type: string;
+          agent_name: string;
+          agent_role: string;
+          plan_reasoning?: string | null;
+          workflow_template?: string | null;
+          workflow_index?: number | null;
+        };
+      } = await createRes.json();
       const r = data.resolved;
+      if (r.plan_reasoning) {
+        addLog("🧠", r.plan_reasoning, C.textMid);
+      }
+      if (r.workflow_template) {
+        const wfLine = r.workflow_index != null && r.workflow_index >= 0
+          ? `${r.workflow_template} (#${r.workflow_index})`
+          : r.workflow_template;
+        addLog("📋", wfLine, C.textMid);
+      }
       const line = labels.resolvedRouting
         ? labels.resolvedRouting
             .replace("{type}", taskTypeLabel(r.task_type))
@@ -323,9 +401,30 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
               <label style={{ fontSize: 12, color: C.textMid, display: "block", marginBottom: 6 }}>{labels.goalLabel ?? "Goal"}</label>
               <input value={goal} onChange={e => setGoal(e.target.value)} placeholder={labels.goalPlaceholder ?? "e.g. Find 50 fintech companies in MENA…"} style={{ width: "100%", padding: "11px 14px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, outline: "none" }} onFocus={e => { e.target.style.borderColor = C.accent; }} onBlur={e => { e.target.style.borderColor = C.border; }} />
             </div>
+            {agents.length > 0 && (
+              <div>
+                <label style={{ fontSize: 12, color: C.textMid, display: "block", marginBottom: 6 }}>{labels.smartPrimaryAgentLabel ?? "Primary executor (optional)"}</label>
+                <select
+                  title={labels.smartPrimaryAgentLabel ?? ""}
+                  value={smartExecutorId}
+                  onChange={e => setSmartExecutorId(e.target.value)}
+                  style={{ width: "100%", padding: "10px 14px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13 }}
+                >
+                  <option value="">{labels.smartPrimaryAgentAuto ?? "Auto — system picks best match"}</option>
+                  {agents.map(a => (
+                    <option key={a.id} value={a.id}>{a.name} ({a.role})</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <button type="button" onClick={launchSmartTask} disabled={launching || !goal.trim() || agents.length === 0} style={{ width: "100%", padding: "13px", borderRadius: 9, border: "none", cursor: agents.length === 0 ? "not-allowed" : "pointer", fontWeight: 600, fontSize: 14, background: launching || agents.length === 0 ? C.surfaceHigh : C.accent, color: launching || agents.length === 0 ? C.textMid : "#fff", transition: "all 0.18s" }}>
               {launching ? (labels.launching ?? "⏳ Running…") : (labels.smartLaunchButton ?? "🧭 Smart launch")}
             </button>
+            {tenantId && (
+              <button type="button" onClick={syncEnterpriseRoster} disabled={launching} style={{ width: "100%", padding: "8px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.textMid, fontSize: 11, cursor: launching ? "not-allowed" : "pointer" }}>
+                {labels.syncRosterButton ?? "Sync full roster (54 roles + skills)"}
+              </button>
+            )}
             {agents.length === 0 && labels.noAgentsHint && (
               <p style={{ fontSize: 11, color: C.amber, margin: 0, lineHeight: 1.45 }}>{labels.noAgentsHint}</p>
             )}
@@ -433,12 +532,20 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
         </div>
 
         {tasks.length === 0 ? (
-          <p style={{ fontSize: 13, color: C.textDim, textAlign: "center", padding: "20px 0" }}>No tasks yet &mdash; launch one above.</p>
+          <p style={{ fontSize: 13, color: C.textDim, textAlign: "center", padding: "20px 0" }}>{labels.historyEmpty ?? labels.empty ?? "No tasks yet."}</p>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                {["Task type", "Time", "Agent", "Tokens", "Duration", "Status", "Actions"].map(h => (
+                {[
+                  labels.historyColTaskType ?? "Task type",
+                  labels.historyColTime ?? "Time",
+                  labels.historyColAgent ?? "Agent",
+                  labels.historyColTokens ?? "Tokens",
+                  labels.historyColDuration ?? "Duration",
+                  labels.historyColStatus ?? "Status",
+                  labels.historyColActions ?? "Actions",
+                ].map(h => (
                   <th key={h} style={{ padding: "8px 12px", fontSize: 11, color: C.textDim, textAlign: "left", letterSpacing: "0.08em", textTransform: "uppercase" }}>{h}</th>
                 ))}
               </tr>
@@ -449,7 +556,7 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
                   <tr key={t.id} style={{ borderBottom: `1px solid ${C.border}` }}>
                     <td style={{ padding: "12px", fontSize: 13, color: C.text }}>{taskTypeLabel(t.type)}</td>
                     <td style={{ padding: "12px", fontSize: 12, color: C.textDim }}>{new Date(t.created_at).toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit" })}</td>
-                    <td style={{ padding: "12px", fontSize: 12, color: C.textMid }}>—</td>
+                    <td style={{ padding: "12px", fontSize: 12, color: C.textMid }}>{agentDisplayName(t.agent_id)}</td>
                     <td style={{ padding: "12px", fontSize: 12, color: C.textMid }}>{t.token_used}</td>
                     <td style={{ padding: "12px", fontSize: 12, color: C.textDim }}>{t.duration_ms != null ? `${t.duration_ms}ms` : "—"}</td>
                     <td style={{ padding: "12px" }}>
@@ -461,17 +568,17 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
                       <div style={{ display: "flex", gap: 6 }}>
                         {t.output && (
                           <button onClick={() => setOutputTask(t)} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.surfaceHigh, color: C.textMid, fontSize: 11, cursor: "pointer" }}>
-                            View
+                            {labels.viewOutput ?? "View"}
                           </button>
                         )}
                         {(t.status === "pending" || t.status === "failed") && (
                           <button onClick={() => enqueue(t.id)} disabled={enqueueing === t.id} style={{ padding: "4px 10px", borderRadius: 6, border: "none", background: C.accent, color: "#fff", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
-                            {enqueueing === t.id ? "…" : "Run"}
+                            {enqueueing === t.id ? "…" : labels.enqueue}
                           </button>
                         )}
                         {t.status === "done" && (
                           <button onClick={() => { setFeedbackTask(t.id); setFeedbackScore(""); }} style={{ padding: "4px 10px", borderRadius: 6, border: "none", background: C.green, color: "#07150e", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
-                            Rate
+                            {labels.feedback}
                           </button>
                         )}
                       </div>
@@ -505,7 +612,7 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
         <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.7)", padding: 16 }}>
           <div style={{ maxHeight: "70vh", width: "100%", maxWidth: 640, display: "flex", flexDirection: "column", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: `1px solid ${C.border}` }}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{outputTask.type} output</p>
+              <p style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{(labels.outputTitleTemplate ?? "{type} output").replace("{type}", taskTypeLabel(outputTask.type))}</p>
               <button onClick={() => setOutputTask(null)} style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.textMid, fontSize: 12, cursor: "pointer" }}>{labels.close}</button>
             </div>
             <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
