@@ -34,6 +34,15 @@ export type EvolutionLabels = {
   concluded: string;
   below: string;
   ok: string;
+  coldStartUnlockProgress: string;
+  coldStartFootnote: string;
+  coldStartRemain: string;
+  coldStartMode0: string;
+  coldStartMode1: string;
+  coldStartMode2: string;
+  coldStartDetail0: string;
+  coldStartDetail1: string;
+  coldStartDetail2: string;
 };
 
 type AgentStat = {
@@ -51,6 +60,8 @@ type EvolutionStatus = {
   agents: AgentStat[];
   active_ab_tests: number;
   agents_below_threshold: number;
+  tenant_completed_tasks?: number;
+  performance_log_total_samples?: number;
 };
 
 type ABTest = {
@@ -140,18 +151,22 @@ export function EvolutionConsole({ labels }: { labels: EvolutionLabels }) {
     </div>
   );
 
-  const totalSamples = evStatus?.agents.reduce((s, a) => s + a.sample_count, 0) ?? 0;
+  const totalPerfSamples = evStatus?.performance_log_total_samples
+    ?? evStatus?.agents.reduce((s, a) => s + a.sample_count, 0)
+    ?? 0;
+  const completedTasks = evStatus?.tenant_completed_tasks ?? 0;
   const COLD_START_TARGET = 20;
-  const coldStartDone = totalSamples >= COLD_START_TARGET;
-  const phase = totalSamples < COLD_START_TARGET ? 0 : totalSamples < 500 ? 1 : 2;
-  const phaseLabels = ["Cold start (human review required)", "Growth (semi-automatic)", "Mature (fully automatic)"];
+  const coldStartDone = completedTasks >= COLD_START_TARGET;
+  const phase = completedTasks < COLD_START_TARGET ? 0 : completedTasks < 500 ? 1 : 2;
+  const phaseLabels = [labels.coldStartMode0, labels.coldStartMode1, labels.coldStartMode2];
+  const phaseDetails = [labels.coldStartDetail0, labels.coldStartDetail1, labels.coldStartDetail2];
 
   return (
     <div className="space-y-8">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <h1 className="text-xl font-semibold text-white">{labels.title}</h1>
-          <p style={{ fontSize: 14, color: "#8892a4", marginTop: 4 }}>System automatically optimises Agent prompts over time</p>
+          <p style={{ fontSize: 14, color: "#8892a4", marginTop: 4 }}>{labels.overview}</p>
         </div>
         <button onClick={load} disabled={loading} style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)", background: "#13171f", color: "#8892a4", fontSize: 12, cursor: "pointer" }}>
           {loading ? "…" : labels.refresh}
@@ -166,19 +181,27 @@ export function EvolutionConsole({ labels }: { labels: EvolutionLabels }) {
               {coldStartDone ? "🧬" : "🔒"} Current mode: {phaseLabels[phase]}
             </span>
             <span style={{ fontSize: 12, color: "#8892a4", marginLeft: 12 }}>
-              {phase === 0 ? "Evolution changes need human confirmation" : "Auto-evolution active"}
+              {phaseDetails[phase]}
             </span>
           </div>
-          <span style={{ fontSize: 12, color: "#3d4557" }}>{totalSamples}/{COLD_START_TARGET} tasks to unlock auto-evolution</span>
+          <span style={{ fontSize: 12, color: "#3d4557" }}>
+            {labels.coldStartUnlockProgress
+              .replace("{n}", String(Math.min(completedTasks, COLD_START_TARGET)))
+              .replace("{t}", String(COLD_START_TARGET))}
+          </span>
         </div>
         <div style={{ height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
-          <div style={{ width: `${Math.min((totalSamples / COLD_START_TARGET) * 100, 100)}%`, height: "100%", background: coldStartDone ? "#2dd4a0" : "#f5a524", borderRadius: 3, transition: "width 1s" }} />
+          <div style={{ width: `${Math.min((completedTasks / COLD_START_TARGET) * 100, 100)}%`, height: "100%", background: coldStartDone ? "#2dd4a0" : "#f5a524", borderRadius: 3, transition: "width 1s" }} />
         </div>
         {!coldStartDone && (
           <p style={{ fontSize: 12, color: "#3d4557", marginTop: 8 }}>
-            Complete {COLD_START_TARGET - totalSamples} more task{COLD_START_TARGET - totalSamples !== 1 ? "s" : ""} to unlock automatic prompt evolution.
+            {labels.coldStartRemain
+              .replace("{n}", String(Math.max(0, COLD_START_TARGET - completedTasks)))}
           </p>
         )}
+        <p style={{ fontSize: 11, color: "#3d4557", marginTop: 10, opacity: 0.9 }}>
+          {labels.coldStartFootnote.replace("{s}", String(totalPerfSamples))}
+        </p>
       </div>
 
       {/* overview cards */}

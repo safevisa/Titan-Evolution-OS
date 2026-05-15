@@ -1,4 +1,9 @@
-"""A/B test management — create tests, route tasks, conclude with a winner."""
+"""A/B test management — create tests, route tasks, conclude with a winner.
+
+Performance correlation: worker writes ``PerformanceLog.extra`` with
+``prompt_version``, ``ab_testing_active``, and ``ab_proxy_variant`` (deterministic
+stratum while ``agent.status == \"testing\"``) for downstream analytics.
+"""
 from __future__ import annotations
 
 import random

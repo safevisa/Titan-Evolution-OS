@@ -335,6 +335,7 @@ async def submit_feedback(
             agent_id=task.agent_id,
             task_id=task.id,
             success_flag=task.status == "done",
+            extra={"source": "human_feedback_endpoint", "task_type": task.task_type},
         )
         db.add(perf)
 

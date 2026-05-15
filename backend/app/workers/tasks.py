@@ -21,8 +21,6 @@ def enqueue_agent_task(self, task_id: str) -> dict:
 
 
 async def _run_task(task_id: str) -> dict:
-    from sqlalchemy import select
-
     from app.agents.hunter_agent import HunterAgent
     from app.agents.outreach_agent import OutreachAgent
     from app.agents.researcher_agent import ResearcherAgent
@@ -32,6 +30,10 @@ async def _run_task(task_id: str) -> dict:
     from app.core.database import AsyncSessionLocal
     from app.memory.long_term import save_memory
     from app.memory.short_term import cache_agent_perf, save_context
+    from app.memory.closure_assessment_sync import (
+        build_performance_log_extra,
+        upsert_gap_closure_skill_ledger,
+    )
     from app.memory.skill_manager import maybe_create_skill
     from app.models.domain import Agent, PerformanceLog, Task
 
@@ -55,6 +57,8 @@ async def _run_task(task_id: str) -> dict:
             await db.commit()
             return {"error": "agent not found"}
 
+        from app.workers.pipeline_followup import MANAGER_SKILL_CLOSURE, maybe_schedule_skill_gap_closure
+
         task.status = "running"
         await db.commit()
 
@@ -65,6 +69,7 @@ async def _run_task(task_id: str) -> dict:
         result_output: dict = {}
         token_used = 0
         error_msg: str | None = None
+        closure_task_to_enqueue: str | None = None
 
         try:
             if task.task_type == "goal_pipeline":
@@ -72,6 +77,30 @@ async def _run_task(task_id: str) -> dict:
 
                 result_output, token_used, success, error_msg = await run_goal_pipeline(
                     db=db, task=task, coordinator_agent=agent
+                )
+                if not success and error_msg:
+                    result_output = {**result_output, "error": error_msg}
+                elif success and isinstance(result_output, dict):
+                    cid = await maybe_schedule_skill_gap_closure(
+                        db,
+                        parent_task=task,
+                        pipeline_output=result_output,
+                        coordinator=agent,
+                    )
+                    if cid:
+                        closure_task_to_enqueue = cid
+                        result_output = {
+                            **result_output,
+                            "skill_gap_followup": {
+                                "closure_task_id": cid,
+                                "status": "queued",
+                            },
+                        }
+            elif task.task_type == MANAGER_SKILL_CLOSURE:
+                from app.workers.skill_gap_closure import run_skill_gap_closure
+
+                result_output, token_used, success, error_msg = await run_skill_gap_closure(
+                    db=db, task=task, manager=agent
                 )
                 if not success and error_msg:
                     result_output = {**result_output, "error": error_msg}
@@ -108,6 +137,24 @@ async def _run_task(task_id: str) -> dict:
         task.duration_ms = elapsed_ms
         task.completed_at = datetime.now(tz=timezone.utc)
 
+        out_dict: dict = result_output if isinstance(result_output, dict) else {}
+        perf_extra = build_performance_log_extra(
+            task=task,
+            agent=agent,
+            task_type=task.task_type,
+            result_output=out_dict,
+            success=success,
+        )
+        if success and task.task_type == MANAGER_SKILL_CLOSURE:
+            await upsert_gap_closure_skill_ledger(
+                db,
+                tenant_id=task.tenant_id,
+                manager_agent=agent,
+                task=task,
+                result_output=out_dict,
+                success=success,
+            )
+
         perf = PerformanceLog(
             tenant_id=task.tenant_id,
             agent_id=task.agent_id,
@@ -116,9 +163,20 @@ async def _run_task(task_id: str) -> dict:
             token_cost=token_used,
             latency_ms=elapsed_ms,
             auto_eval_reason=error_msg,
+            extra=perf_extra,
         )
         db.add(perf)
         await db.commit()
+
+        if closure_task_to_enqueue:
+            enqueue_agent_task.delay(closure_task_to_enqueue)
+
+        if success and task.task_type == MANAGER_SKILL_CLOSURE:
+            rows = result_output.get("child_tasks_spawned") if isinstance(result_output, dict) else None
+            if isinstance(rows, list):
+                for row in rows:
+                    if isinstance(row, dict) and row.get("task_id"):
+                        enqueue_agent_task.delay(str(row["task_id"]))
 
         # ── Quota + Billing ───────────────────────────────────────────────────
         from app.models.domain import Tenant as _Tenant
@@ -165,7 +223,7 @@ async def _run_task(task_id: str) -> dict:
         await cache_agent_perf(str(task.agent_id), auto_score)
 
         # Skill distillation (only on high-quality success; score set after human feedback)
-        if success:
+        if success and task.task_type != MANAGER_SKILL_CLOSURE:
             await maybe_create_skill(
                 db=db,
                 tenant_id=task.tenant_id,

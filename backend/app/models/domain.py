@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -69,6 +69,12 @@ class PerformanceLog(Base):
     latency_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     human_feedback: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     auto_eval_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    extra: Mapped[dict] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+        default=dict,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -114,6 +120,12 @@ class SkillDoc(Base):
     is_global: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     source_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("agents.id"), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    meta: Mapped[dict] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+        default=dict,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

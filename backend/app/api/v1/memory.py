@@ -4,8 +4,8 @@ from __future__ import annotations
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,6 +52,8 @@ class SkillRead(BaseModel):
     success_rate: float
     is_global: bool
     version: int
+    source_agent_id: Optional[UUID] = None
+    meta: dict = Field(default_factory=dict)
 
 
 class SkillUpdate(BaseModel):
@@ -66,6 +68,7 @@ async def list_skills(
     tenant_id: Optional[UUID] = None,
     role: Optional[str] = None,
     search: Optional[str] = None,
+    limit: int = Query(200, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
 ) -> list[SkillDoc]:
     q = select(SkillDoc)
@@ -76,7 +79,7 @@ async def list_skills(
     if search:
         q = q.where(SkillDoc.name.ilike(f"%{search}%"))
     q = q.order_by(SkillDoc.success_rate.desc(), SkillDoc.usage_count.desc())
-    res = await db.execute(q.limit(50))
+    res = await db.execute(q.limit(limit))
     return list(res.scalars().all())
 
 

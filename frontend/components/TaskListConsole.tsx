@@ -65,6 +65,18 @@ export type TaskListLabels = {
   syncRosterButton?: string;
   syncRosterRunning?: string;
   syncRosterDone?: string;
+  pipelineStageDone?: string;
+  pipelineStageSkipped?: string;
+  pipelineSummaryHeader?: string;
+  pipelineStagesTitle?: string;
+  pipelineGoal?: string;
+  pipelineWorkflow?: string;
+  pipelineLeadsPreview?: string;
+  pipelineRawToggle?: string;
+  pipelineManagerHint?: string;
+  /** Shown when backend queued a manager_skill_closure after skipped pipeline stages. Use {id} for closure task id. */
+  pipelineSkillGapFollowup?: string;
+  outputQualityHint?: string;
 };
 
 const C = {
@@ -108,6 +120,189 @@ const STATUS_COLOR: Record<string, string> = { done: C.green, running: C.accent,
 
 type WorkflowTemplateRow = { index: number; name: string; node_count: number; roles: string[] };
 
+function isPipelineOutput(out: Record<string, unknown> | null | undefined): out is Record<string, unknown> & { stages: unknown[] } {
+  return !!out && out.collaborative === true && Array.isArray(out.stages);
+}
+
+function appendPipelineCompletionLogs(
+  out: Record<string, unknown> | null,
+  addLog: (icon: string, msg: string, color?: string) => void,
+  labels: TaskListLabels,
+) {
+  if (!isPipelineOutput(out)) return;
+  const stages = out.stages as Array<Record<string, unknown>>;
+  addLog("📊", labels.pipelineSummaryHeader ?? "Pipeline summary", C.accent);
+  for (const s of stages) {
+    if (s.skipped === true) {
+      const role = String(s.role ?? "?");
+      const reason = String(s.reason ?? "unknown");
+      const line = (labels.pipelineStageSkipped ?? "{role} · skipped: {reason}")
+        .replace("{role}", role)
+        .replace("{reason}", reason);
+      addLog("⏭️", line, C.amber);
+      continue;
+    }
+    const role = String(s.role ?? "?");
+    const taskType = String(s.task_type ?? "");
+    const agent = String(s.agent_name ?? "");
+    const tokens = s.tokens != null ? String(s.tokens) : "0";
+    const line = (labels.pipelineStageDone ?? "{role} · {taskType} — {agent} ({tokens} tokens)")
+      .replace("{role}", role)
+      .replace("{taskType}", taskType)
+      .replace("{agent}", agent)
+      .replace("{tokens}", tokens);
+    addLog("🤝", line, C.textMid);
+  }
+  if (stages.some((x) => x.skipped === true) && labels.pipelineManagerHint) {
+    addLog("🧭", labels.pipelineManagerHint, C.amber);
+  }
+  const sku = out.skill_gap_followup;
+  if (sku && typeof sku === "object" && !Array.isArray(sku) && labels.pipelineSkillGapFollowup) {
+    const cid = String((sku as Record<string, unknown>).closure_task_id ?? "");
+    if (cid) {
+      addLog("🧩", labels.pipelineSkillGapFollowup.replace("{id}", cid), C.purple);
+    }
+  }
+  if (labels.outputQualityHint) {
+    addLog("💡", labels.outputQualityHint, C.textDim);
+  }
+}
+
+function GoalPipelineOutputBody({
+  output,
+  labels,
+  showRaw,
+  onToggleRaw,
+}: {
+  output: Record<string, unknown> & { stages: unknown[] };
+  labels: TaskListLabels;
+  showRaw: boolean;
+  onToggleRaw: () => void;
+}) {
+  const goal = String(output.goal ?? "");
+  const wf = String(output.workflow ?? "");
+  const stages = (output.stages as Array<Record<string, unknown>>) ?? [];
+
+  const firstLead = (() => {
+    const L = output.leads;
+    if (L && typeof L === "object" && !Array.isArray(L)) {
+      const leads = (L as { leads?: unknown }).leads;
+      if (Array.isArray(leads) && leads[0] && typeof leads[0] === "object") {
+        return leads[0] as Record<string, unknown>;
+      }
+    }
+    if (Array.isArray(L) && L[0] && typeof L[0] === "object") return L[0] as Record<string, unknown>;
+    return null;
+  })();
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {(goal || wf) && (
+        <div style={{ padding: 12, borderRadius: 10, background: C.surfaceHigh, border: `1px solid ${C.border}` }}>
+          {goal ? (
+            <p style={{ margin: "0 0 6px", fontSize: 12, color: C.textDim }}>
+              {labels.pipelineGoal ?? "Goal"}
+            </p>
+          ) : null}
+          {goal ? <p style={{ margin: 0, fontSize: 13, color: C.text, lineHeight: 1.5 }}>{goal}</p> : null}
+          {wf ? (
+            <p style={{ margin: goal ? "10px 0 0" : 0, fontSize: 12, color: C.textDim }}>
+              {labels.pipelineWorkflow ?? "Workflow"}: <span style={{ color: C.textMid }}>{wf}</span>
+            </p>
+          ) : null}
+        </div>
+      )}
+
+      <div>
+        <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 600, color: C.text }}>
+          {labels.pipelineStagesTitle ?? "Collaboration stages"}
+        </p>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${C.border}`, color: C.textDim, textAlign: "left" }}>
+              <th style={{ padding: "6px 8px" }}>Role</th>
+              <th style={{ padding: "6px 8px" }}>Step</th>
+              <th style={{ padding: "6px 8px" }}>Agent</th>
+              <th style={{ padding: "6px 8px", textAlign: "right" }}>Tokens</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stages.map((s, i) => {
+              const skipped = s.skipped === true;
+              return (
+                <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, color: skipped ? C.amber : C.textMid }}>
+                  <td style={{ padding: "8px", fontWeight: 600, color: C.text }}>{String(s.role ?? "—")}</td>
+                  <td style={{ padding: "8px" }}>
+                    {skipped ? (
+                      <span style={{ color: C.amber }}>skipped ({String(s.reason ?? "")})</span>
+                    ) : (
+                      String(s.task_type ?? "—")
+                    )}
+                  </td>
+                  <td style={{ padding: "8px" }}>{skipped ? "—" : String(s.agent_name ?? "—")}</td>
+                  <td style={{ padding: "8px", textAlign: "right" }}>{skipped ? "—" : String(s.tokens ?? 0)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {(() => {
+        const fu = output.skill_gap_followup;
+        if (!fu || typeof fu !== "object" || Array.isArray(fu)) return null;
+        const id = String((fu as Record<string, unknown>).closure_task_id ?? "");
+        if (!id || !labels.pipelineSkillGapFollowup) return null;
+        return (
+          <div
+            style={{
+              padding: 10,
+              borderRadius: 8,
+              border: `1px solid ${C.border}`,
+              background: "rgba(167,139,250,0.08)",
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 12, color: C.purple, lineHeight: 1.5 }}>
+              {labels.pipelineSkillGapFollowup.replace("{id}", id)}
+            </p>
+          </div>
+        );
+      })()}
+
+      {firstLead && (
+        <div style={{ padding: 12, borderRadius: 10, border: `1px solid ${C.border}`, background: "rgba(91,110,245,0.06)" }}>
+          <p style={{ margin: "0 0 6px", fontSize: 12, color: C.textDim }}>{labels.pipelineLeadsPreview ?? "Lead preview"}</p>
+          <p style={{ margin: 0, fontSize: 13, color: C.text }}>
+            {String(firstLead.contact_name ?? firstLead.name ?? "")}{" "}
+            {firstLead.email ? <span style={{ color: C.accent }}>· {String(firstLead.email)}</span> : null}
+          </p>
+          {(firstLead.company_name ?? firstLead.company) ? (
+            <p style={{ margin: "6px 0 0", fontSize: 12, color: C.textMid }}>
+              {String(firstLead.company_name ?? firstLead.company)}
+              {firstLead.score != null || firstLead["得分"] != null ? (
+                <span style={{ marginLeft: 8 }}>· score {String(firstLead.score ?? firstLead["得分"])}</span>
+              ) : null}
+            </p>
+          ) : null}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={onToggleRaw}
+        style={{ alignSelf: "flex-start", padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.accent, fontSize: 12, cursor: "pointer" }}
+      >
+        {showRaw ? "↑ " : ""}{labels.pipelineRawToggle ?? "Raw JSON"}
+      </button>
+      {showRaw ? (
+        <pre style={{ whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: 11, color: C.textMid, lineHeight: 1.6, margin: 0 }}>
+          {JSON.stringify(output, null, 2)}
+        </pre>
+      ) : null}
+    </div>
+  );
+}
+
 export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
   const { tenantId } = useAuth();
   const [statusFilter, setStatusFilter] = useState("all");
@@ -119,6 +314,7 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
   const [feedbackScore, setFeedbackScore] = useState("");
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [outputTask, setOutputTask] = useState<TaskRow | null>(null);
+  const [showOutputRaw, setShowOutputRaw] = useState(false);
 
   // Launch panel state
   const [taskType, setTaskType] = useState("goal_pipeline");
@@ -228,6 +424,7 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
       if (updated.status === "done") {
         clearInterval(poll);
         addLog("✅", `Task completed! Duration: ${updated.duration_ms}ms · Tokens: ${updated.token_used}`, C.green);
+        appendPipelineCompletionLogs(updated.output, addLog, labels);
         setLiveLogs(prev => [...prev, { time: new Date().toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", second: "2-digit" }), icon: "🧠", msg: "Memory saved — this experience will improve future tasks", color: C.purple }]);
         setGoal("");
         setLaunching(false);
@@ -567,7 +764,7 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
                     <td style={{ padding: "12px" }}>
                       <div style={{ display: "flex", gap: 6 }}>
                         {t.output && (
-                          <button onClick={() => setOutputTask(t)} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.surfaceHigh, color: C.textMid, fontSize: 11, cursor: "pointer" }}>
+                          <button onClick={() => { setShowOutputRaw(false); setOutputTask(t); }} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.surfaceHigh, color: C.textMid, fontSize: 11, cursor: "pointer" }}>
                             {labels.viewOutput ?? "View"}
                           </button>
                         )}
@@ -610,15 +807,24 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
       {/* Output modal */}
       {outputTask && (
         <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.7)", padding: 16 }}>
-          <div style={{ maxHeight: "70vh", width: "100%", maxWidth: 640, display: "flex", flexDirection: "column", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14 }}>
+          <div style={{ maxHeight: "85vh", width: "100%", maxWidth: isPipelineOutput(outputTask.output) ? 720 : 640, display: "flex", flexDirection: "column", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: `1px solid ${C.border}` }}>
               <p style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{(labels.outputTitleTemplate ?? "{type} output").replace("{type}", taskTypeLabel(outputTask.type))}</p>
-              <button onClick={() => setOutputTask(null)} style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.textMid, fontSize: 12, cursor: "pointer" }}>{labels.close}</button>
+              <button onClick={() => { setOutputTask(null); setShowOutputRaw(false); }} style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.textMid, fontSize: 12, cursor: "pointer" }}>{labels.close}</button>
             </div>
             <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-              <pre style={{ whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: 11, color: C.textMid, lineHeight: 1.6 }}>
-                {JSON.stringify(outputTask.output, null, 2)}
-              </pre>
+              {isPipelineOutput(outputTask.output) ? (
+                <GoalPipelineOutputBody
+                  output={outputTask.output}
+                  labels={labels}
+                  showRaw={showOutputRaw}
+                  onToggleRaw={() => setShowOutputRaw((v) => !v)}
+                />
+              ) : (
+                <pre style={{ whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: 11, color: C.textMid, lineHeight: 1.6 }}>
+                  {JSON.stringify(outputTask.output, null, 2)}
+                </pre>
+              )}
             </div>
           </div>
         </div>

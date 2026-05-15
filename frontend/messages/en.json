@@ -128,7 +128,8 @@
         "sales_brief": "Sales brief",
         "exec_one_pager": "Executive one-pager",
         "sprint_plan": "Sprint plan (manager)",
-        "risk_assessment": "Risk assessment (manager)"
+        "risk_assessment": "Risk assessment (manager)",
+        "manager_skill_closure": "Skill-gap closure (management)"
       },
       "tenantFilter": "Filter by tenant UUID (optional)",
       "statusFilter": "Status",
@@ -144,7 +145,18 @@
       "feedbackPlaceholder": "Quality score 0–1 (e.g. 0.85)",
       "submitFeedback": "Submit",
       "output": "Output",
-      "close": "Close"
+      "close": "Close",
+      "pipelineStageDone": "{role} · {taskType} — {agent} ({tokens} tokens)",
+      "pipelineStageSkipped": "{role} · skipped: {reason}",
+      "pipelineSummaryHeader": "Pipeline summary",
+      "pipelineStagesTitle": "Who did what",
+      "pipelineGoal": "Goal",
+      "pipelineWorkflow": "Workflow",
+      "pipelineLeadsPreview": "Top lead preview",
+      "pipelineRawToggle": "Show raw JSON",
+      "pipelineManagerHint": "Some stages were skipped (missing active agent for a role). Sync roster or enable agents, then re-run or assign a focused task.",
+      "pipelineSkillGapFollowup": "A management task was queued to propose follow-up work from skipped stages (closure task {id}). It will appear in task history when picked up.",
+      "outputQualityHint": "Rate the task with “Rate” to feed evolution quality scores."
     },
     "agentsPage": {
       "title": "Digital workforce",
@@ -159,6 +171,11 @@
       "taskCount": "Tasks",
       "avgScore": "Avg score",
       "noAgents": "No agents yet. Create one above.",
+      "skillsTitle": "SOP & skills (this role)",
+      "skillLearnedTag": "Learned",
+      "skillLibraryTag": "Library",
+      "skillsEmpty": "No skills in this tenant’s library for this role tag yet.",
+      "skillsLoadError": "Could not load skills.",
       "tenant": "Tenant ID",
       "tenantPlaceholder": "Paste tenant UUID"
     },
@@ -246,7 +263,16 @@
       "running": "Running",
       "concluded": "Concluded",
       "below": "Below threshold",
-      "ok": "Healthy"
+      "ok": "Healthy",
+      "coldStartUnlockProgress": "{n}/{t} completed tasks toward auto-evolution",
+      "coldStartFootnote": "The “samples” column in the table below counts performance logs per agent (last 100 each). Cold-start progress uses tenant-wide completed tasks. Cross-agent performance log rows: {s}.",
+      "coldStartRemain": "Complete {n} more completed task(s) to unlock automatic prompt evolution.",
+      "coldStartMode0": "Cold start (human review)",
+      "coldStartMode1": "Growth (semi-automatic)",
+      "coldStartMode2": "Mature (fully automatic)",
+      "coldStartDetail0": "Evolution changes require human confirmation",
+      "coldStartDetail1": "Eligible for broader automatic prompt tuning",
+      "coldStartDetail2": "Fully automatic evolution"
     }
     ,
     "skillsPage": {

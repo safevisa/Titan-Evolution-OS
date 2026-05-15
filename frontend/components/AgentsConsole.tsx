@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiUrl } from "@/lib/api-origin";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -15,11 +15,29 @@ const ROLES = ["hunter", "outreach", "researcher", "delivery", "manager"];
 const ROLE_COLOR: Record<string, string> = { hunter: C.purple, outreach: C.accent, researcher: C.green, delivery: C.amber, manager: "#f472b6" };
 type AgentRow = { id: string; name: string; role: string; status: string; task_count: number; avg_score: number | null };
 
+type SkillApiRow = { id: string; name: string; role_tags: string[]; source_agent_id?: string | null };
+
+export type AgentsConsoleLabels = {
+  skillsTitle: string;
+  skillLearnedTag: string;
+  skillLibraryTag: string;
+  skillsEmpty: string;
+  skillsLoadError: string;
+};
+
+const DEFAULT_AGENT_SKILL_LABELS: AgentsConsoleLabels = {
+  skillsTitle: "SOP & skills (this role)",
+  skillLearnedTag: "Learned",
+  skillLibraryTag: "Library",
+  skillsEmpty: "No skills in this tenant’s library for this role tag yet.",
+  skillsLoadError: "Could not load skills.",
+};
+
 function rosterAutosyncKey(tenantId: string) {
   return `titan_roster_autosync_v2_${tenantId}`;
 }
 
-export function AgentsConsole() {
+export function AgentsConsole({ labels }: { labels?: Partial<AgentsConsoleLabels> }) {
   const { tenantId } = useAuth();
   const [agents, setAgents] = useState<AgentRow[]>([]);
   const [rosterTarget, setRosterTarget] = useState<number | null>(null);
@@ -32,6 +50,14 @@ export function AgentsConsole() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
+
+  const [skillsByRole, setSkillsByRole] = useState<Map<string, SkillApiRow[]>>(new Map());
+  const [skillsError, setSkillsError] = useState("");
+
+  const skillLabels = useMemo(
+    () => ({ ...DEFAULT_AGENT_SKILL_LABELS, ...labels }),
+    [labels],
+  );
 
   const load = useCallback(async () => {
     if (!tenantId) return;
@@ -103,13 +129,36 @@ export function AgentsConsole() {
         }
       }
       setAgents(rows);
+
+      setSkillsError("");
+      try {
+        const skRes = await fetch(apiUrl(`/api/v1/memory/skills?tenant_id=${tenantId}&limit=400`));
+        if (!skRes.ok) {
+          setSkillsError(skillLabels.skillsLoadError);
+          setSkillsByRole(new Map());
+        } else {
+          const skList = (await skRes.json()) as SkillApiRow[];
+          const map = new Map<string, SkillApiRow[]>();
+          for (const sk of skList) {
+            for (const tag of sk.role_tags ?? []) {
+              const arr = map.get(tag) ?? [];
+              if (!arr.some((x) => x.id === sk.id)) arr.push(sk);
+              map.set(tag, arr);
+            }
+          }
+          setSkillsByRole(map);
+        }
+      } catch {
+        setSkillsError(skillLabels.skillsLoadError);
+        setSkillsByRole(new Map());
+      }
     } catch {
       setLoadError("Network error");
       setAgents([]);
     } finally {
       setLoading(false);
     }
-  }, [tenantId]);
+  }, [tenantId, skillLabels]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -153,10 +202,17 @@ export function AgentsConsole() {
       {loadError ? (
         <p style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>{loadError}</p>
       ) : null}
+      {skillsError ? (
+        <p style={{ color: C.amber, fontSize: 12, marginBottom: 12 }}>{skillsError}</p>
+      ) : null}
 
       {loading ? <p style={{ color: C.textDim, fontSize: 13 }}>Loading...</p> : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
-          {agents.map(a => (
+          {agents.map(a => {
+            const roleSkills = skillsByRole.get(a.role) ?? [];
+            const shown = roleSkills.slice(0, 10);
+            const more = roleSkills.length - shown.length;
+            return (
             <div key={a.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -184,8 +240,32 @@ export function AgentsConsole() {
                 </div>
               </div>
               <div style={{ fontSize: 12, color: C.textDim }}>📋 {a.task_count} tasks</div>
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 8 }}>{skillLabels.skillsTitle}</div>
+                {shown.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: 11, color: C.textDim, lineHeight: 1.45 }}>{skillLabels.skillsEmpty}</p>
+                ) : (
+                  <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11, color: C.textMid, lineHeight: 1.55 }}>
+                    {shown.map((sk) => {
+                      const learned = sk.source_agent_id === a.id;
+                      return (
+                        <li key={sk.id} style={{ marginBottom: 4 }}>
+                          {sk.name}
+                          <span style={{ color: learned ? C.green : C.textDim, marginLeft: 6, fontSize: 10 }}>
+                            ({learned ? skillLabels.skillLearnedTag : skillLabels.skillLibraryTag})
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                {more > 0 ? (
+                  <p style={{ margin: "6px 0 0", fontSize: 10, color: C.textDim }}>+{more} more</p>
+                ) : null}
+              </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

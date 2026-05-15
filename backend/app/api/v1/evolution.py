@@ -6,12 +6,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.evolution.scorer import compute_agent_stats
-from app.models.domain import ABTest, Agent, PromptVersion
+from app.models.domain import ABTest, Agent, PromptVersion, Task
 
 router = APIRouter(prefix="/evolution", tags=["evolution"])
 
@@ -49,10 +49,22 @@ async def evolution_status(
     )
     active_tests = ab_q.scalars().all()
 
+    tenant_completed_tasks = 0
+    if tenant_id is not None:
+        done_q = await db.execute(
+            select(func.count())
+            .select_from(Task)
+            .where(Task.tenant_id == tenant_id)
+            .where(Task.status == "done")
+        )
+        tenant_completed_tasks = int(done_q.scalar_one() or 0)
+
     return {
         "agents": stats_list,
         "active_ab_tests": len(active_tests),
         "agents_below_threshold": sum(1 for s in stats_list if s["below_threshold"]),
+        "tenant_completed_tasks": tenant_completed_tasks,
+        "performance_log_total_samples": sum(s["sample_count"] for s in stats_list),
     }
 
 

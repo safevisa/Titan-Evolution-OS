@@ -128,7 +128,8 @@
         "sales_brief": "销售简报",
         "exec_one_pager": "高管一页纸",
         "sprint_plan": "冲刺计划（经理）",
-        "risk_assessment": "风险评估（经理）"
+        "risk_assessment": "风险评估（经理）",
+        "manager_skill_closure": "技能缺口闭环（管理层）"
       },
       "tenantFilter": "按租户 UUID 筛选（可选）",
       "statusFilter": "状态",
@@ -144,7 +145,18 @@
       "feedbackPlaceholder": "质量评分 0–1（如 0.85）",
       "submitFeedback": "提交",
       "output": "输出",
-      "close": "关闭"
+      "close": "关闭",
+      "pipelineStageDone": "{role} · {taskType} — {agent}（{tokens} tokens）",
+      "pipelineStageSkipped": "{role} · 已跳过：{reason}",
+      "pipelineSummaryHeader": "流水线摘要",
+      "pipelineStagesTitle": "各智能体分工",
+      "pipelineGoal": "目标",
+      "pipelineWorkflow": "工作流",
+      "pipelineLeadsPreview": "线索预览",
+      "pipelineRawToggle": "查看原始 JSON",
+      "pipelineManagerHint": "部分阶段因缺少该角色的在岗 Agent 被跳过。可同步企业编制或启用对应数字员工后重试，或拆成单步任务。",
+      "pipelineSkillGapFollowup": "已排队管理层任务，将根据跳过阶段拆解后续补课/自学子任务（关联任务 {id}），执行后可在任务历史中查看。",
+      "outputQualityHint": "使用「评分」提交质量分，可驱动进化与技能沉淀。"
     },
     "agentsPage": {
       "title": "数字员工管理",
@@ -159,6 +171,11 @@
       "taskCount": "任务数",
       "avgScore": "平均评分",
       "noAgents": "暂无 Agent，请先创建。",
+      "skillsTitle": "岗位技能（SOP）",
+      "skillLearnedTag": "任务习得",
+      "skillLibraryTag": "知识库",
+      "skillsEmpty": "本租户技能库中暂无该岗位标签的技能。",
+      "skillsLoadError": "技能列表加载失败。",
       "tenant": "租户 ID",
       "tenantPlaceholder": "粘贴租户 UUID"
     }
@@ -247,7 +264,16 @@
       "running": "进行中",
       "concluded": "已结束",
       "below": "低于阈值",
-      "ok": "健康"
+      "ok": "健康",
+      "coldStartUnlockProgress": "已完成 {n}/{t} 个任务，可解锁自动进化",
+      "coldStartFootnote": "下表「样本数」为各 Agent 最近 100 条绩效日志条数；冷启动进度按租户内「已完成任务」总数统计。跨 Agent 绩效日志合计：{s}。",
+      "coldStartRemain": "再完成 {n} 个已结束任务即可解锁自动提示演进。",
+      "coldStartMode0": "冷启动（需人工审核）",
+      "coldStartMode1": "成长期（半自动）",
+      "coldStartMode2": "成熟期（全自动）",
+      "coldStartDetail0": "演进变更需人工确认",
+      "coldStartDetail1": "可扩大自动提示优化范围",
+      "coldStartDetail2": "自动进化已全开"
     }
     ,
     "skillsPage": {
