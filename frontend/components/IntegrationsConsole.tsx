@@ -227,8 +227,8 @@ export function IntegrationsConsole({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
-      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        await res.json().catch(() => ({}));
         setMessage("sync_failed");
         return;
       }
