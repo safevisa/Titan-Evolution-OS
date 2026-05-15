@@ -22,6 +22,8 @@ PROVIDER_FACEBOOK_GRAPH_OAUTH: Final = "facebook_graph_oauth"
 PROVIDER_WEIBO_OAUTH: Final = "weibo_oauth"
 PROVIDER_REDDIT_OAUTH: Final = "reddit_oauth"
 PROVIDER_GOOGLE_YOUTUBE_OAUTH: Final = "google_youtube_oauth"
+PROVIDER_GOOGLE_WORKSPACE_OAUTH: Final = "google_workspace_oauth"
+PROVIDER_GITHUB_OAUTH: Final = "github_oauth"
 
 WEBHOOK_PROVIDERS: frozenset[str] = frozenset(
     {
@@ -49,6 +51,8 @@ OAUTH_PROVIDERS: frozenset[str] = frozenset(
         PROVIDER_WEIBO_OAUTH,
         PROVIDER_REDDIT_OAUTH,
         PROVIDER_GOOGLE_YOUTUBE_OAUTH,
+        PROVIDER_GOOGLE_WORKSPACE_OAUTH,
+        PROVIDER_GITHUB_OAUTH,
     }
 )
 

@@ -92,6 +92,10 @@ services:
       REDDIT_CLIENT_SECRET: ${REDDIT_CLIENT_SECRET:-}
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_WORKSPACE_OAUTH_CLIENT_ID: ${GOOGLE_WORKSPACE_OAUTH_CLIENT_ID:-}
+      GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET: ${GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET:-}
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -157,9 +161,37 @@ services:
       REDDIT_CLIENT_SECRET: ${REDDIT_CLIENT_SECRET:-}
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_WORKSPACE_OAUTH_CLIENT_ID: ${GOOGLE_WORKSPACE_OAUTH_CLIENT_ID:-}
+      GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET: ${GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET:-}
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    entrypoint: ["celery"]
+    command: ["-A", "app.workers.celery_app", "beat", "-l", "INFO"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/titan
+      SYNC_DATABASE_URL: postgresql+psycopg2://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/titan
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      TITAN_INTEGRATIONS_FERNET_KEY: ${TITAN_INTEGRATIONS_FERNET_KEY:-}
+      TITAN_API_PUBLIC_BASE_URL: ${TITAN_API_PUBLIC_BASE_URL:-}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_WORKSPACE_OAUTH_CLIENT_ID: ${GOOGLE_WORKSPACE_OAUTH_CLIENT_ID:-}
+      GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET: ${GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET:-}
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
+    depends_on:
       redis:
         condition: service_healthy
 

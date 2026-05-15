@@ -88,6 +88,20 @@ async def _run_capability_core(
         data = await run_builtin_capability("resend_email", clean_params)
         return {"ok": True, "capability_id": capability_id, "data": data}
 
+    from app.context_sync.capability_handlers import try_context_sync_capability
+    from app.computer_use.capability_handlers import try_computer_use_capability
+
+    handled, teo_result = await try_context_sync_capability(
+        session, tenant_id=tenant_id, capability_id=capability_id, clean_params=clean_params
+    )
+    if handled and teo_result is not None:
+        return teo_result
+    handled, teo_result = await try_computer_use_capability(
+        session, tenant_id=tenant_id, capability_id=capability_id, clean_params=clean_params
+    )
+    if handled and teo_result is not None:
+        return teo_result
+
     if cap.connection_provider_any and has_user_connection(cap, provs):
         inner = await invoke_external_capability(capability_id, clean_params, session, tenant_id)
         return {

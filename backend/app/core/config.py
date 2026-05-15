@@ -73,6 +73,21 @@ class Settings(BaseSettings):
     # Google OAuth for YouTube Data API (separate from GOOGLE_API_KEY / Gemini).
     google_oauth_client_id: Optional[str] = None
     google_oauth_client_secret: Optional[str] = None
+    # TEO-DUAL: Context Sync (Gmail + Calendar) — may reuse google_oauth_* if unset.
+    google_workspace_oauth_client_id: Optional[str] = None
+    google_workspace_oauth_client_secret: Optional[str] = None
+    github_oauth_client_id: Optional[str] = None
+    github_oauth_client_secret: Optional[str] = None
+    context_sync_interval_sec: int = 1200
+    # TEO-DUAL: Computer Use runner (M03).
+    computer_use_runner_url: Optional[str] = None
+    computer_use_runner_token: Optional[str] = None
+    computer_use_ground_url: Optional[str] = None
+    computer_use_ground_model: str = "ui-tars-1.5-7b"
+    computer_use_max_concurrent: int = 2
+    computer_use_artifact_dir: str = "/var/titan/cu-artifacts"
+    # TEO-DUAL: OpenHuman sidecar JWT (M04).
+    titan_sidecar_jwt_secret: Optional[str] = None
 
 
 settings = Settings()

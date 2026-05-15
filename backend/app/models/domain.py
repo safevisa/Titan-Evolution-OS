@@ -39,6 +39,88 @@ class IntegrationConnection(Base):
     )
 
 
+class IntegrationSyncState(Base):
+    """Per-tenant sync cursor for Context Sync (Gmail / Calendar / GitHub)."""
+
+    __tablename__ = "integration_sync_states"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "provider", name="uq_integration_sync_states_tenant_provider"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    cursor_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    last_success_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class MemoryTreeNode(Base):
+    """Hierarchical memory tree node; links to Qdrant via qdrant_point_id."""
+
+    __tablename__ = "memory_tree_nodes"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "source",
+            "external_key",
+            name="uq_memory_tree_nodes_tenant_source_key",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    level: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("memory_tree_nodes.id"), nullable=True
+    )
+    external_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    qdrant_point_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    token_estimate: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    occurred_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ComputerUseRun(Base):
+    """GUI automation run executed in computer-use-runner sandbox."""
+
+    __tablename__ = "computer_use_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    task_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=True)
+    instruction: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
+    sandbox_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    step_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    artifact_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SidecarDeviceBinding(Base):
+    """OpenHuman GPL sidecar device bound to a tenant (M04)."""
+
+    __tablename__ = "sidecar_device_bindings"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    device_id: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    label: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    last_push_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class CapabilityAuditLog(Base):
     """Append-only record for each execute_capability invocation (no secrets)."""
 

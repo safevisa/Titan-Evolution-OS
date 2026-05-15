@@ -104,3 +104,88 @@ async def search_memories(
         with_payload=True,
     )
     return [{"score": h.score, **h.payload} for h in hits]
+
+
+async def upsert_sync_point(
+    *,
+    tenant_id: str,
+    point_id: str,
+    summary: str,
+    payload: dict[str, Any],
+) -> None:
+    await _ensure_collection(tenant_id)
+    vector = await _embed(summary)
+    body = {
+        "tenant_id": tenant_id,
+        "agent_id": "",
+        "task_type": "context_sync",
+        "success_flag": True,
+        "timestamp": time.time(),
+        **payload,
+    }
+    get_qdrant().upsert(
+        collection_name=_col(tenant_id),
+        points=[qm.PointStruct(id=point_id, vector=vector, payload=body)],
+    )
+
+
+async def search_sync_context(
+    *,
+    tenant_id: str,
+    query: str,
+    top_k: int = 8,
+    sources: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    await _ensure_collection(tenant_id)
+    vector = await _embed(query)
+    must: list[qm.FieldCondition] = [
+        qm.FieldCondition(key="task_type", match=qm.MatchValue(value="context_sync")),
+    ]
+    if sources:
+        must.append(
+            qm.FieldCondition(key="source", match=qm.MatchAny(any=sources)),
+        )
+    filt = qm.Filter(must=must)
+    hits = get_qdrant().search(
+        collection_name=_col(tenant_id),
+        query_vector=vector,
+        query_filter=filt,
+        limit=top_k,
+        with_payload=True,
+    )
+    return [{"score": h.score, **h.payload} for h in hits]
+
+
+async def delete_sync_points_for_source(*, tenant_id: str, source: str) -> int:
+    """Remove Qdrant points for a context_sync source. Returns deleted count."""
+    col = _col(tenant_id)
+    q = get_qdrant()
+    existing = [c.name for c in q.get_collections().collections]
+    if col not in existing:
+        return 0
+
+    filt = qm.Filter(
+        must=[
+            qm.FieldCondition(key="task_type", match=qm.MatchValue(value="context_sync")),
+            qm.FieldCondition(key="source", match=qm.MatchValue(value=source)),
+        ]
+    )
+    deleted = 0
+    offset = None
+    while True:
+        records, offset = q.scroll(
+            collection_name=col,
+            scroll_filter=filt,
+            limit=128,
+            offset=offset,
+            with_payload=False,
+            with_vectors=False,
+        )
+        if not records:
+            break
+        ids = [p.id for p in records]
+        q.delete(collection_name=col, points_selector=qm.PointIdsList(points=ids))
+        deleted += len(ids)
+        if offset is None:
+            break
+    return deleted

@@ -77,4 +77,7 @@ def can_execute_capability(
             return False, "missing_server_credentials"
         return True, "ok"
 
+    if cap.auth_mode == "none" and not cap.connection_provider_any and not cap.env_keys:
+        return True, "ok"
+
     return False, "capability_misconfigured"

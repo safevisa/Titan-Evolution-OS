@@ -54,9 +54,20 @@ from app.integrations.oauth_flows import (
     twitter_authorize_url,
     unpack_oauth_state,
 )
+from app.context_sync.oauth_github import github_authorize_url, github_exchange_code, github_oauth_redirect_uri
+from app.context_sync.oauth_workspace import (
+    google_workspace_authorize_url,
+    google_workspace_exchange_code,
+    google_workspace_redirect_uri,
+)
+from app.context_sync.purge import SOURCE_BY_OAUTH, purge_for_oauth_provider
+from app.context_sync.sync_service import SYNC_PROVIDER_GITHUB, SYNC_PROVIDER_WORKSPACE, build_sync_status
+from app.context_sync.sync_state_repo import upsert_sync_state
 from app.integrations.providers import (
     CREDENTIAL_PROVIDERS,
     PROVIDER_FACEBOOK_GRAPH_OAUTH,
+    PROVIDER_GITHUB_OAUTH,
+    PROVIDER_GOOGLE_WORKSPACE_OAUTH,
     PROVIDER_GOOGLE_YOUTUBE_OAUTH,
     PROVIDER_LINKEDIN_OAUTH,
     PROVIDER_REDDIT_OAUTH,
@@ -376,8 +387,11 @@ async def remove_connection(
     ok = await delete_connection(db, tenant_id, provider)
     if not ok:
         raise HTTPException(status_code=404, detail="connection not found")
+    purged: dict[str, int] = {}
+    if provider in SOURCE_BY_OAUTH:
+        purged = await purge_for_oauth_provider(db, tenant_id, provider)
     await db.commit()
-    return {"ok": True, "deleted": provider}
+    return {"ok": True, "deleted": provider, "purged": purged}
 
 
 # --- OAuth (browser redirect) -------------------------------------------------
@@ -766,3 +780,148 @@ async def oauth_google_youtube_callback(
         await db.rollback()
         return _html_err(str(e))
     return _html_ok("YouTube connected", "YouTube channel connected for commenting API.")
+
+
+@router.get("/oauth/google-workspace/start")
+async def oauth_google_workspace_start(
+    tenant_id: UUID = Query(...),
+    db: AsyncSession = Depends(get_db),
+) -> RedirectResponse:
+    if await db.get(Tenant, tenant_id) is None:
+        raise HTTPException(status_code=404, detail="tenant not found")
+    try:
+        url = google_workspace_authorize_url(tenant_id=str(tenant_id))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return RedirectResponse(url, status_code=302)
+
+
+@router.get("/oauth/google-workspace/callback", response_class=HTMLResponse)
+async def oauth_google_workspace_callback(
+    code: str = Query(""),
+    state: str = Query(""),
+    error: str = Query(""),
+    error_description: str = Query(""),
+    db: AsyncSession = Depends(get_db),
+) -> HTMLResponse:
+    if error:
+        return _html_err(error_description or error)
+    if not code or not state:
+        return _html_err("missing code or state")
+    try:
+        st = unpack_oauth_state(state)
+        if st.get("p") != "google_workspace":
+            return _html_err("invalid state provider")
+        tid = UUID(str(st["t"]))
+        if await db.get(Tenant, tid) is None:
+            return _html_err("tenant not found", 404)
+        data = await google_workspace_exchange_code(code)
+        at = str(data.get("access_token", ""))
+        if not at:
+            return _html_err("google token missing")
+        secret = attach_token_expiry(
+            {
+                "access_token": at,
+                "refresh_token": str(data.get("refresh_token") or ""),
+            },
+            data,
+        )
+        scope = data.get("scope")
+        if isinstance(scope, str) and scope.strip():
+            secret["scopes"] = scope.split()
+        await upsert_encrypted_payload(db, tid, PROVIDER_GOOGLE_WORKSPACE_OAUTH, payload=secret, meta={})
+        await upsert_sync_state(db, tenant_id=tid, provider=SYNC_PROVIDER_WORKSPACE, enabled=True)
+        await db.commit()
+    except (ValueError, KeyError, IntegrationVaultError) as e:
+        await db.rollback()
+        return _html_err(str(e))
+    return _html_ok(
+        "Google Workspace connected",
+        f"Gmail and Calendar connected. Redirect URI: {google_workspace_redirect_uri()}",
+    )
+
+
+@router.get("/oauth/github/start")
+async def oauth_github_start(
+    tenant_id: UUID = Query(...),
+    db: AsyncSession = Depends(get_db),
+) -> RedirectResponse:
+    if await db.get(Tenant, tenant_id) is None:
+        raise HTTPException(status_code=404, detail="tenant not found")
+    try:
+        url = github_authorize_url(tenant_id=str(tenant_id))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return RedirectResponse(url, status_code=302)
+
+
+@router.get("/oauth/github/callback", response_class=HTMLResponse)
+async def oauth_github_callback(
+    code: str = Query(""),
+    state: str = Query(""),
+    error: str = Query(""),
+    error_description: str = Query(""),
+    db: AsyncSession = Depends(get_db),
+) -> HTMLResponse:
+    if error:
+        return _html_err(error_description or error)
+    if not code or not state:
+        return _html_err("missing code or state")
+    try:
+        st = unpack_oauth_state(state)
+        if st.get("p") != "github":
+            return _html_err("invalid state provider")
+        tid = UUID(str(st["t"]))
+        if await db.get(Tenant, tid) is None:
+            return _html_err("tenant not found", 404)
+        data = await github_exchange_code(code)
+        at = str(data.get("access_token", ""))
+        if not at:
+            return _html_err("github token missing")
+        secret = attach_token_expiry({"access_token": at}, data)
+        await upsert_encrypted_payload(db, tid, PROVIDER_GITHUB_OAUTH, payload=secret, meta={})
+        await upsert_sync_state(db, tenant_id=tid, provider=SYNC_PROVIDER_GITHUB, enabled=True)
+        await db.commit()
+    except (ValueError, KeyError, IntegrationVaultError) as e:
+        await db.rollback()
+        return _html_err(str(e))
+    return _html_ok("GitHub connected", f"GitHub connected. Redirect URI: {github_oauth_redirect_uri()}")
+
+
+@router.get("/tenants/{tenant_id}/sync-status")
+async def tenant_sync_status(
+    tenant_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    if await db.get(Tenant, tenant_id) is None:
+        raise HTTPException(status_code=404, detail="tenant not found")
+    return await build_sync_status(db, tenant_id)
+
+
+class SyncTriggerBody(BaseModel):
+    sources: list[str] | None = Field(
+        default=None,
+        description="Optional subset: gmail, gcal, github",
+    )
+
+
+@router.post("/tenants/{tenant_id}/sync/trigger")
+async def tenant_sync_trigger(
+    tenant_id: UUID,
+    body: SyncTriggerBody | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    if await db.get(Tenant, tenant_id) is None:
+        raise HTTPException(status_code=404, detail="tenant not found")
+    params: dict[str, Any] = {}
+    if body and body.sources:
+        params["sources"] = body.sources
+    params["_actor"] = "api:sync_trigger"
+    result = await execute_capability(
+        "context_sync_run",
+        params,
+        tenant_id=str(tenant_id),
+        db=db,
+    )
+    await db.commit()
+    return result

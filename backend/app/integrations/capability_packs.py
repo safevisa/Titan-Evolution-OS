@@ -52,6 +52,24 @@ CAPABILITY_PACKS: tuple[CapabilityPack, ...] = (
         capability_refs=("wechat_work_notify@v1", "feishu_lark_notify@v1", "resend_email@v1"),
         roles_hint=("hr", "finance", "operations"),
     ),
+    CapabilityPack(
+        id="context_sync",
+        display_name="Context Sync",
+        description="Gmail, Google Calendar, and GitHub auto-context (TEO-DUAL M02).",
+        capability_refs=("context_sync_run@v1",),
+        roles_hint=("manager", "operations", "researcher", "hunter", "outreach"),
+    ),
+    CapabilityPack(
+        id="desktop_automation",
+        display_name="Desktop Automation",
+        description="Cloud sandbox computer use via Agent-S (TEO-DUAL M03).",
+        capability_refs=(
+            "computer_use_submit@v1",
+            "computer_use_status@v1",
+            "computer_use_cancel@v1",
+        ),
+        roles_hint=("delivery", "operations", "researcher"),
+    ),
 )
 
 

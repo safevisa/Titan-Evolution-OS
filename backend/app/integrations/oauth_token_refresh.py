@@ -7,7 +7,10 @@ from urllib.parse import urlencode
 
 from app.core.config import settings
 from app.integrations.oauth_extended import google_refresh_access_token, reddit_refresh_access_token
+from app.context_sync.oauth_workspace import google_workspace_refresh_access_token
 from app.integrations.providers import (
+    PROVIDER_GITHUB_OAUTH,
+    PROVIDER_GOOGLE_WORKSPACE_OAUTH,
     PROVIDER_GOOGLE_YOUTUBE_OAUTH,
     PROVIDER_LINKEDIN_OAUTH,
     PROVIDER_REDDIT_OAUTH,
@@ -21,6 +24,7 @@ _REFRESHABLE = frozenset(
         PROVIDER_LINKEDIN_OAUTH,
         PROVIDER_REDDIT_OAUTH,
         PROVIDER_GOOGLE_YOUTUBE_OAUTH,
+        PROVIDER_GOOGLE_WORKSPACE_OAUTH,
     }
 )
 
@@ -68,6 +72,10 @@ async def refresh_oauth_payload(provider: str, payload: dict[str, Any]) -> dict[
         data = await reddit_refresh_access_token(rt)
     elif provider == PROVIDER_GOOGLE_YOUTUBE_OAUTH:
         data = await google_refresh_access_token(rt)
+    elif provider == PROVIDER_GOOGLE_WORKSPACE_OAUTH:
+        data = await google_workspace_refresh_access_token(rt)
+    elif provider == PROVIDER_GITHUB_OAUTH:
+        return payload
     else:
         return payload
 

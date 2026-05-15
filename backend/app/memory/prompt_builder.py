@@ -1,11 +1,15 @@
 """Prompt assembler — injects episodic memories + skill docs into the base prompt."""
 from __future__ import annotations
 
+import uuid
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.context_sync.config_helpers import context_sync_enabled, inject_max_tokens
+from app.memory.context_retrieval import fetch_sync_context_block
 from app.memory.long_term import search_memories
-from app.models.domain import SkillDoc
+from app.models.domain import SkillDoc, Tenant
 
 
 async def build_enhanced_prompt(
@@ -39,6 +43,16 @@ async def build_enhanced_prompt(
     skills = skills_q.scalars().all()
 
     parts: list[str] = [base_prompt.strip()]
+
+    tenant_row = await db.get(Tenant, uuid.UUID(tenant_id))
+    if tenant_row and context_sync_enabled(tenant_row.config):
+        sync_block = await fetch_sync_context_block(
+            tenant_id=tenant_id,
+            query=f"{task_type}: {task_context}",
+            max_tokens=inject_max_tokens(tenant_row.config),
+        )
+        if sync_block:
+            parts.append("\n\n" + sync_block)
 
     if memories:
         mem_block = "\n\n[Relevant past experiences]\n" + "\n---\n".join(

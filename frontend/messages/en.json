@@ -93,6 +93,11 @@
       "workflowCapabilitiesLabel": "Step capabilities (from template)",
       "capabilityPackLabel": "Capability pack (reference)",
       "capabilityPackHint": "Preset integration bundles for digital employee roles — configure grants in Integrations settings.",
+      "capabilityPackApplyHint": "Selected pack is merged into tenant grants before launch.",
+      "computerUseTitle": "Desktop automation run",
+      "computerUseRunId": "Run ID",
+      "computerUseStatus": "Status",
+      "computerUseArtifact": "Recording / artifact",
       "smartLaunchHint": "Describe what you want in plain language. The system picks a task type and the best-matching active digital employee; collaborative pipelines still run every DAG stage with the right roles on your roster.",
       "smartLaunchProgress": "Resolving task type and agent from your description…",
       "smartLaunchButton": "🧭 Smart launch",
@@ -259,7 +264,40 @@
       "deleteConnection": "Remove",
       "oauthHint": "OAuth opens in a new tab; return here and refresh when done.",
       "category": "Category",
-      "executeBlocked": "Blocked"
+      "executeBlocked": "Blocked",
+      "contextSync": {
+        "title": "Context sync (Gmail / Calendar / GitHub)",
+        "googleWorkspace": "Google Workspace",
+        "github": "GitHub",
+        "overview": "Sync status by source",
+        "lastSync": "Last sync",
+        "never": "Never",
+        "trigger": "Sync now",
+        "syncing": "Syncing…",
+        "statusOk": "OK",
+        "statusError": "Error",
+        "statusPending": "Pending",
+        "statusNotConnected": "Not connected",
+        "gmail": "Gmail",
+        "gcal": "Calendar",
+        "lastError": "Last error"
+      },
+      "capabilityPacks": {
+        "title": "Capability packs",
+        "contextSync": "Context sync",
+        "desktopAutomation": "Desktop automation",
+        "apply": "Apply",
+        "applying": "Applying…",
+        "applied": "Capability pack applied."
+      },
+      "errors": {
+        "load_failed": "Failed to load integrations.",
+        "save_failed": "Failed to save webhook.",
+        "sync_failed": "Sync failed. Check connections and tenant context_sync.enabled.",
+        "sync_triggered": "Sync started. Refresh status in a moment.",
+        "pack_failed": "Failed to apply capability pack.",
+        "pack_applied": "Capability pack applied."
+      }
     },
     "evolutionPage": {
       "title": "Evolution Console",

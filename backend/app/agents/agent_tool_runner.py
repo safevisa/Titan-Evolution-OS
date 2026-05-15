@@ -16,6 +16,7 @@ from app.integrations.agent_tool_bridge import (
 from app.integrations.connections_repo import list_providers_for_tenant
 from app.integrations.executor import execute_capability
 from app.models.domain import Tenant
+from app.memory.token_compress import compress_for_llm
 from app.services.llm import complete_chat, complete_chat_with_tools
 
 
@@ -104,11 +105,15 @@ async def run_agent_with_capability_tools(
                 db=session,
             )
             tool_results.append({"capability_ref": cap_ref, "result": result})
+            tool_payload = compress_for_llm(
+                json.dumps(result, ensure_ascii=False, default=str),
+                max_chars=8000,
+            )
             convo.append(
                 {
                     "role": "tool",
                     "tool_call_id": tc.get("id", name),
-                    "content": json.dumps(result, ensure_ascii=False, default=str)[:8000],
+                    "content": tool_payload,
                 }
             )
 

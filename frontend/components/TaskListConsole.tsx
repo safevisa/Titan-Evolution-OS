@@ -79,6 +79,11 @@ export type TaskListLabels = {
   outputQualityHint?: string;
   capabilityPackLabel?: string;
   capabilityPackHint?: string;
+  capabilityPackApplyHint?: string;
+  computerUseTitle?: string;
+  computerUseRunId?: string;
+  computerUseStatus?: string;
+  computerUseArtifact?: string;
   workflowCapabilitiesLabel?: string;
 };
 
@@ -182,6 +187,44 @@ function appendPipelineCompletionLogs(
   if (labels.outputQualityHint) {
     addLog("💡", labels.outputQualityHint, C.textDim);
   }
+}
+
+function ComputerUseOutputBanner({
+  output,
+  labels,
+}: {
+  output: Record<string, unknown>;
+  labels: TaskListLabels;
+}) {
+  const runId = output.computer_use_run_id;
+  const status = output.computer_use_status;
+  const artifact = output.artifact_url ?? output.recording_url;
+  if (!runId && !status && !artifact) return null;
+  return (
+    <div style={{ marginBottom: 16, padding: 12, borderRadius: 10, border: `1px solid ${C.border}`, background: C.surfaceHigh }}>
+      <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 600, color: C.text }}>
+        {labels.computerUseTitle ?? "Desktop automation"}
+      </p>
+      {runId ? (
+        <p style={{ margin: "0 0 4px", fontSize: 12, color: C.textMid }}>
+          {labels.computerUseRunId ?? "Run ID"}: <span style={{ color: C.text }}>{String(runId)}</span>
+        </p>
+      ) : null}
+      {status ? (
+        <p style={{ margin: "0 0 4px", fontSize: 12, color: C.textMid }}>
+          {labels.computerUseStatus ?? "Status"}: <span style={{ color: C.text }}>{String(status)}</span>
+        </p>
+      ) : null}
+      {artifact ? (
+        <p style={{ margin: 0, fontSize: 12, color: C.textMid }}>
+          {labels.computerUseArtifact ?? "Artifact"}:{" "}
+          <a href={String(artifact)} target="_blank" rel="noopener noreferrer" style={{ color: C.accent }}>
+            {String(artifact)}
+          </a>
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 function GoalPipelineOutputBody({
@@ -501,6 +544,7 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
     setLiveLogs([]);
     addLog("🧭", labels.smartLaunchProgress ?? "Resolving task type and agent from your description…", C.accent);
     try {
+      if (capabilityPackId) await applySelectedPack();
       const wn = workflowNameOverride.trim();
       const body: Record<string, unknown> = { tenant_id: tenantId, goal: goal.trim() };
       if (wn) body.workflow_name = wn;
@@ -553,12 +597,22 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
     }
   };
 
+  const applySelectedPack = async () => {
+    if (!tenantId || !capabilityPackId) return;
+    await fetch(apiUrl(`/api/v1/integrations/tenants/${tenantId}/grants/apply-pack`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pack_id: capabilityPackId, merge: true }),
+    });
+  };
+
   const launchTask = async () => {
     if (!tenantId || !selectedAgent || !goal.trim()) return;
     setLaunching(true);
     setLiveLogs([]);
     addLog("🚀", `Creating ${taskTypeLabel(taskType)}…`, C.accent);
     try {
+      if (capabilityPackId) await applySelectedPack();
       const agent = agents.find(a => a.id === selectedAgent);
       const input: Record<string, unknown> = { goal: goal.trim(), criteria: goal.trim() };
       if (taskType === "goal_pipeline") {
@@ -888,9 +942,14 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
                   onToggleRaw={() => setShowOutputRaw((v) => !v)}
                 />
               ) : (
-                <pre style={{ whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: 11, color: C.textMid, lineHeight: 1.6 }}>
-                  {JSON.stringify(outputTask.output, null, 2)}
-                </pre>
+                <>
+                  {outputTask.output ? (
+                    <ComputerUseOutputBanner output={outputTask.output} labels={labels} />
+                  ) : null}
+                  <pre style={{ whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: 11, color: C.textMid, lineHeight: 1.6 }}>
+                    {JSON.stringify(outputTask.output, null, 2)}
+                  </pre>
+                </>
               )}
             </div>
           </div>

@@ -93,6 +93,11 @@
       "workflowCapabilitiesLabel": "节点能力（来自模板）",
       "capabilityPackLabel": "能力包（参考）",
       "capabilityPackHint": "数字员工常用集成能力预设 — 请在「集成」设置中配置授权与连接。",
+      "capabilityPackApplyHint": "启动任务前会将所选能力包合并到租户授权列表。",
+      "computerUseTitle": "桌面自动化任务",
+      "computerUseRunId": "运行 ID",
+      "computerUseStatus": "状态",
+      "computerUseArtifact": "录屏 / 产物",
       "smartLaunchHint": "用自然语言描述需求即可。系统会根据关键词推断任务类型，并自动选择最匹配的活跃数字员工；若路由到协同流水线，仍按工作流 DAG 依次调用各职能岗位（不要求必须有经理）。",
       "smartLaunchProgress": "正在根据描述解析任务类型并匹配数字员工…",
       "smartLaunchButton": "🧭 智能启动",
@@ -260,7 +265,40 @@
       "deleteConnection": "移除",
       "oauthHint": "OAuth 将在新标签页打开；完成后返回此页并点击刷新。",
       "category": "分类",
-      "executeBlocked": "不可用原因"
+      "executeBlocked": "不可用原因",
+      "contextSync": {
+        "title": "上下文同步（Gmail / 日历 / GitHub）",
+        "googleWorkspace": "Google Workspace",
+        "github": "GitHub",
+        "overview": "各数据源同步状态",
+        "lastSync": "上次同步",
+        "never": "从未",
+        "trigger": "立即同步",
+        "syncing": "同步中…",
+        "statusOk": "正常",
+        "statusError": "错误",
+        "statusPending": "待同步",
+        "statusNotConnected": "未连接",
+        "gmail": "Gmail",
+        "gcal": "日历",
+        "lastError": "最近错误"
+      },
+      "capabilityPacks": {
+        "title": "能力包",
+        "contextSync": "上下文同步",
+        "desktopAutomation": "桌面自动化",
+        "apply": "应用",
+        "applying": "应用中…",
+        "applied": "能力包已应用。"
+      },
+      "errors": {
+        "load_failed": "加载集成数据失败。",
+        "save_failed": "保存 Webhook 失败。",
+        "sync_failed": "同步失败，请检查连接与租户 context_sync.enabled。",
+        "sync_triggered": "已开始同步，请稍后刷新状态。",
+        "pack_failed": "应用能力包失败。",
+        "pack_applied": "能力包已应用。"
+      }
     },
     "evolutionPage": {
       "title": "进化控制台",
