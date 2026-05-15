@@ -211,6 +211,38 @@ async def google_exchange_code(code: str) -> dict[str, Any]:
     return data
 
 
+async def reddit_refresh_access_token(refresh_token: str) -> dict[str, Any]:
+    auth = (settings.reddit_client_id or "", settings.reddit_client_secret or "")
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.post(
+            "https://www.reddit.com/api/v1/access_token",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            auth=auth,
+            data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+        )
+        data = r.json()
+    if r.status_code != 200 or "access_token" not in data:
+        raise ValueError(str(data.get("error", "reddit_refresh_failed")))
+    return data
+
+
+async def google_refresh_access_token(refresh_token: str) -> dict[str, Any]:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id": settings.google_oauth_client_id,
+                "client_secret": settings.google_oauth_client_secret,
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+            },
+        )
+        data = r.json()
+    if r.status_code != 200 or "access_token" not in data:
+        raise ValueError(str(data.get("error_description", data.get("error", "google_refresh_failed"))))
+    return data
+
+
 async def google_youtube_fetch_channel_id(access_token: str) -> str:
     async with httpx.AsyncClient(timeout=20.0) as client:
         r = await client.get(

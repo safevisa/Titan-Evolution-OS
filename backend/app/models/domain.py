@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func, text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -37,6 +37,53 @@ class IntegrationConnection(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class CapabilityAuditLog(Base):
+    """Append-only record for each execute_capability invocation (no secrets)."""
+
+    __tablename__ = "capability_audit_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    capability_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    actor: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    correlation_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    request_summary: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    ok: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    result_summary: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class CapabilityUsageRollup(Base):
+    """Monthly per-capability invocation metering for billing dashboards."""
+
+    __tablename__ = "capability_usage_rollup"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), primary_key=True)
+    period_year: Mapped[int] = mapped_column(Integer, primary_key=True)
+    period_month: Mapped[int] = mapped_column(Integer, primary_key=True)
+    capability_ref: Mapped[str] = mapped_column(String(180), primary_key=True)
+    invocation_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    estimated_cost_usd: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False, default=0)
+
+
+class CapabilityIdempotency(Base):
+    """Per-tenant idempotency reservation for execute_capability (replay on success)."""
+
+    __tablename__ = "capability_idempotency"
+    __table_args__ = (UniqueConstraint("tenant_id", "idempotency_key", name="uq_capability_idem_tenant_key"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    capability_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    result_ok: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    result_summary: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Agent(Base):

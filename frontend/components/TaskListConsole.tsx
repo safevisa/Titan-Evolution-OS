@@ -77,6 +77,9 @@ export type TaskListLabels = {
   /** Shown when backend queued a manager_skill_closure after skipped pipeline stages. Use {id} for closure task id. */
   pipelineSkillGapFollowup?: string;
   outputQualityHint?: string;
+  capabilityPackLabel?: string;
+  capabilityPackHint?: string;
+  workflowCapabilitiesLabel?: string;
 };
 
 const C = {
@@ -118,7 +121,20 @@ const TASK_TYPES = [
 const STATUS_ICON: Record<string, string> = { done: "✅", running: "⏳", failed: "❌", pending: "⏸" };
 const STATUS_COLOR: Record<string, string> = { done: C.green, running: C.accent, failed: C.red, pending: C.amber };
 
-type WorkflowTemplateRow = { index: number; name: string; node_count: number; roles: string[] };
+type WorkflowNodeRow = { role?: string | null; capability_id?: string | null; label?: string | null };
+type WorkflowTemplateRow = {
+  index: number;
+  name: string;
+  node_count: number;
+  roles: string[];
+  nodes?: WorkflowNodeRow[];
+};
+type CapabilityPackRow = {
+  id: string;
+  display_name: string;
+  description: string;
+  capability_refs: string[];
+};
 
 function isPipelineOutput(out: Record<string, unknown> | null | undefined): out is Record<string, unknown> & { stages: unknown[] } {
   return !!out && out.collaborative === true && Array.isArray(out.stages);
@@ -326,6 +342,8 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
   const [workflows, setWorkflows] = useState<WorkflowTemplateRow[]>([]);
   const [workflowIndex, setWorkflowIndex] = useState(0);
   const [workflowNameOverride, setWorkflowNameOverride] = useState("");
+  const [capabilityPacks, setCapabilityPacks] = useState<CapabilityPackRow[]>([]);
+  const [capabilityPackId, setCapabilityPackId] = useState("");
   const logRef = useRef<HTMLDivElement>(null);
 
   const loadTasks = useCallback(async () => {
@@ -370,11 +388,24 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
     }
   }, [tenantId]);
 
+  const loadCapabilityPacks = useCallback(async () => {
+    const res = await fetch(apiUrl("/api/v1/integrations/capability-packs"));
+    if (res.ok) {
+      const data: CapabilityPackRow[] = await res.json();
+      setCapabilityPacks(data);
+      setCapabilityPackId(prev => prev || (data[0]?.id ?? ""));
+    }
+  }, []);
+
   useEffect(() => { loadTasks(); }, [loadTasks]);
   useEffect(() => { loadAgents(); }, [loadAgents]);
   useEffect(() => {
     if (tenantId) void loadWorkflows();
   }, [tenantId, loadWorkflows]);
+  useEffect(() => { void loadCapabilityPacks(); }, [loadCapabilityPacks]);
+
+  const selectedWorkflow = workflows.find(w => w.index === workflowIndex);
+  const selectedPack = capabilityPacks.find(p => p.id === capabilityPackId);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -656,6 +687,42 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
                     </select>
                     {labels.workflowRolesHint && (
                       <p style={{ fontSize: 11, color: C.textDim, marginTop: 6, lineHeight: 1.45 }}>{labels.workflowRolesHint}</p>
+                    )}
+                    {selectedWorkflow?.nodes && selectedWorkflow.nodes.length > 0 && (
+                      <div style={{ marginTop: 10, padding: "10px 12px", background: C.surfaceHigh, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                        <p style={{ fontSize: 11, color: C.textMid, marginBottom: 6 }}>{labels.workflowCapabilitiesLabel ?? "Step capabilities"}</p>
+                        <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11, color: C.textDim, lineHeight: 1.5 }}>
+                          {selectedWorkflow.nodes.map((n, i) => (
+                            <li key={`${n.role}-${i}`}>
+                              {n.role ?? "?"}
+                              {n.capability_id ? ` · ${n.capability_id}` : ""}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {capabilityPacks.length > 0 && (
+                  <div>
+                    <label style={{ fontSize: 12, color: C.textMid, display: "block", marginBottom: 6 }}>{labels.capabilityPackLabel ?? "Capability pack (reference)"}</label>
+                    <select
+                      title={labels.capabilityPackLabel ?? "Capability pack"}
+                      value={capabilityPackId}
+                      onChange={e => setCapabilityPackId(e.target.value)}
+                      style={{ width: "100%", padding: "10px 14px", background: C.surfaceHigh, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13 }}
+                    >
+                      {capabilityPacks.map(p => (
+                        <option key={p.id} value={p.id}>{p.display_name}</option>
+                      ))}
+                    </select>
+                    {labels.capabilityPackHint && (
+                      <p style={{ fontSize: 11, color: C.textDim, marginTop: 6, lineHeight: 1.45 }}>{labels.capabilityPackHint}</p>
+                    )}
+                    {selectedPack && selectedPack.capability_refs.length > 0 && (
+                      <p style={{ fontSize: 11, color: C.textDim, marginTop: 6, lineHeight: 1.45 }}>
+                        {selectedPack.capability_refs.join(" · ")}
+                      </p>
                     )}
                   </div>
                 )}

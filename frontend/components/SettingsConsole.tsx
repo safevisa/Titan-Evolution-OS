@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiUrl } from "@/lib/api-origin";
 import { useAuth } from "@/hooks/useAuth";
@@ -30,6 +31,7 @@ export type SettingsLabels = {
   copy: string;
   copied: string;
   searchPlugins: string;
+  openIntegrations: string;
 };
 
 type TenantDetail = {
@@ -59,7 +61,13 @@ const PLAN_COLOR: Record<string, string> = {
   enterprise: "text-amber-400",
 };
 
-export function SettingsConsole({ labels }: { labels: SettingsLabels }) {
+export function SettingsConsole({
+  labels,
+  locale = "en",
+}: {
+  labels: SettingsLabels;
+  locale?: string;
+}) {
   const { tenantId: currentTenantId, isPlatformAdmin } = useAuth();
   const [tenants, setTenants] = useState<TenantDetail[]>([]);
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
@@ -183,7 +191,15 @@ export function SettingsConsole({ labels }: { labels: SettingsLabels }) {
 
   return (
     <div className="space-y-10">
-      <h1 className="text-xl font-semibold text-white">{labels.title}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold text-white">{labels.title}</h1>
+        <Link
+          href={`/${locale}/settings/integrations`}
+          className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-sky-400 hover:bg-zinc-800"
+        >
+          {labels.openIntegrations}
+        </Link>
+      </div>
 
       {/* create tenant */}
       {isPlatformAdmin && (

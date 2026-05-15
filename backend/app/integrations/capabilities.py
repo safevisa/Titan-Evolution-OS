@@ -19,3 +19,9 @@ class ToolCapability:
     connection_provider_any: tuple[str, ...] = field(default_factory=tuple)
     # Optional: all must be set on the API server to expose OAuth "connect" links.
     oauth_server_env_keys: tuple[str, ...] = field(default_factory=tuple)
+    # Semantic version for replay / audit (e.g. telegram_send_message@v1).
+    version: str = "v1"
+    # Per-tenant invocations per minute (None = use category default).
+    quota_per_minute: int | None = None
+    # Estimated USD per successful invocation for metering rollup.
+    bill_unit_usd: float = 0.0

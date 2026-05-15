@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     titan_admin_api_key: Optional[str] = None
     # Fernet key (urlsafe base64 32-byte) for encrypting integration tokens / webhook URLs at rest.
     titan_integrations_fernet_key: Optional[str] = None
+    # Previous Fernet key during rotation — decrypt only; new writes use primary key above.
+    titan_integrations_fernet_key_previous: Optional[str] = None
     # Public API base URL (no trailing slash), used for OAuth redirect_uri, e.g. https://api.example.com
     titan_api_public_base_url: Optional[str] = None
     # Slack OAuth (optional; enables "Add to Slack" flow for slack_post_message).

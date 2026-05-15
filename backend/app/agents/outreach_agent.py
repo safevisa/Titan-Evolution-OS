@@ -1,9 +1,12 @@
 """Outreach Agent — writes personalised emails via LLM and sends via Resend."""
 from __future__ import annotations
 
+import json
+import re
+
 from app.agents.base_agent import BaseAgent, TaskResult, TaskStub
+from app.integrations.executor import execute_capability
 from app.services.llm import complete_chat
-from app.tools.resend_tool import send_email
 
 
 class OutreachAgent(BaseAgent):
@@ -38,8 +41,6 @@ class OutreachAgent(BaseAgent):
         ]
         text, tokens = await complete_chat(messages)
 
-        import json, re
-
         subject, body = "Follow-up", text
         try:
             m = re.search(r"\{.*\}", text, re.DOTALL)
@@ -52,7 +53,18 @@ class OutreachAgent(BaseAgent):
 
         sent = False
         if to_email:
-            sent = await send_email(to=to_email, subject=subject, body=body)
+            cap_result = await execute_capability(
+                "resend_email",
+                {
+                    "to": to_email,
+                    "subject": subject,
+                    "body": body,
+                    "_correlation_id": task.id,
+                    "_actor": f"agent:{self.agent_id}",
+                },
+                tenant_id=self.tenant_id,
+            )
+            sent = bool(cap_result.get("ok") and cap_result.get("data"))
 
         return TaskResult(
             output={"subject": subject, "body": body, "sent": sent, "to": to_email},

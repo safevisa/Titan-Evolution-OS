@@ -4,5 +4,10 @@ import { SettingsConsole, type SettingsLabels } from "@/components/SettingsConso
 export default async function SettingsPage({ params }: { params: { locale: string } }) {
   const dict = await getDictionary(params.locale);
   const app = dict.app as Record<string, unknown>;
-  return <SettingsConsole labels={app.settingsPage as SettingsLabels} />;
+  return (
+    <SettingsConsole
+      locale={params.locale}
+      labels={app.settingsPage as SettingsLabels}
+    />
+  );
 }

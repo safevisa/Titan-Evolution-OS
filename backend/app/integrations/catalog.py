@@ -28,6 +28,7 @@ CAPABILITIES: tuple[ToolCapability, ...] = (
         status="live",
         env_keys=("apollo_api_key",),
         roles_hint=("hunter", "sdr", "bd"),
+        bill_unit_usd=0.01,
     ),
     ToolCapability(
         id="resend_email",
@@ -38,6 +39,7 @@ CAPABILITIES: tuple[ToolCapability, ...] = (
         status="live",
         env_keys=("resend_api_key",),
         roles_hint=("outreach", "customer_success", "marketing"),
+        bill_unit_usd=0.005,
     ),
     ToolCapability(
         id="slack_post_message",
@@ -118,6 +120,9 @@ CAPABILITIES: tuple[ToolCapability, ...] = (
         env_keys=(),
         connection_provider_any=(PROVIDER_TELEGRAM_BOT,),
         roles_hint=("operations", "community", "support"),
+        version="v1",
+        quota_per_minute=60,
+        bill_unit_usd=0.002,
     ),
     ToolCapability(
         id="whatsapp_cloud_text",
@@ -323,12 +328,35 @@ CAPABILITIES: tuple[ToolCapability, ...] = (
     ),
 )
 
-_ID_INDEX = {c.id: c for c in CAPABILITIES}
+def _build_capability_index() -> dict[str, ToolCapability]:
+    idx: dict[str, ToolCapability] = {}
+    for cap in CAPABILITIES:
+        idx[cap.id] = cap
+        if cap.version:
+            idx[f"{cap.id}@{cap.version}"] = cap
+    return idx
+
+
+CAPABILITY_INDEX: dict[str, ToolCapability] = _build_capability_index()
 
 
 def get_capability(capability_id: str) -> ToolCapability | None:
-    return _ID_INDEX.get(capability_id)
+    from app.integrations.capability_version import resolve_capability_ref
+
+    resolved = resolve_capability_ref(capability_id, index=CAPABILITY_INDEX)
+    return resolved.capability if resolved else None
+
+
+def resolve_capability(capability_id: str):
+    from app.integrations.capability_version import resolve_capability_ref
+
+    return resolve_capability_ref(capability_id, index=CAPABILITY_INDEX)
 
 
 def all_capability_ids() -> frozenset[str]:
-    return frozenset(_ID_INDEX.keys())
+    ids: set[str] = set()
+    for cap in CAPABILITIES:
+        ids.add(cap.id)
+        if cap.version:
+            ids.add(f"{cap.id}@{cap.version}")
+    return frozenset(ids)

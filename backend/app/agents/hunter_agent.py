@@ -1,9 +1,12 @@
 """Hunter Agent — searches for leads using Apollo (or LLM fallback)."""
 from __future__ import annotations
 
+import json
+import re
+
 from app.agents.base_agent import BaseAgent, TaskResult, TaskStub
+from app.integrations.executor import execute_capability
 from app.services.llm import complete_chat
-from app.tools.apollo_tool import search_leads
 
 
 class HunterAgent(BaseAgent):
@@ -19,13 +22,20 @@ class HunterAgent(BaseAgent):
         prompt = await self.get_enhanced_prompt(task) or self._DEFAULT_PROMPT
         criteria = task.input.get("criteria", task.input)
 
-        # Try Apollo first; fall back to LLM simulation
-        apollo_leads = await search_leads(criteria)
+        cap_result = await execute_capability(
+            "apollo_search",
+            {
+                "criteria": criteria,
+                "_correlation_id": task.id,
+                "_actor": f"agent:{self.agent_id}",
+            },
+            tenant_id=self.tenant_id,
+        )
+        if cap_result.get("ok") and cap_result.get("data"):
+            leads = cap_result["data"]
+            if isinstance(leads, list) and leads:
+                return TaskResult(output={"leads": leads}, token_used=0)
 
-        if apollo_leads:
-            return TaskResult(output={"leads": apollo_leads}, token_used=0)
-
-        # LLM fallback — generates plausible example leads for demo/cold-start
         messages = [
             {"role": "system", "content": prompt},
             {
@@ -38,8 +48,6 @@ class HunterAgent(BaseAgent):
             },
         ]
         text, tokens = await complete_chat(messages)
-
-        import json, re
 
         leads: list = []
         try:

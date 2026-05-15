@@ -331,9 +331,19 @@ def get_default_gtm_workflow() -> list["WorkflowTemplate"]:
             name="GTM collaborative pipeline",
             dag_config={
                 "nodes": [
-                    {"id": "hunt", "role": "hunter", "task_type": "lead_search"},
+                    {
+                        "id": "hunt",
+                        "role": "hunter",
+                        "task_type": "lead_search",
+                        "capability_id": "apollo_search",
+                    },
                     {"id": "research", "role": "researcher", "task_type": "company_research"},
-                    {"id": "outreach", "role": "outreach", "task_type": "email_write"},
+                    {
+                        "id": "outreach",
+                        "role": "outreach",
+                        "task_type": "email_write",
+                        "capability_id": "resend_email",
+                    },
                     {"id": "deliver", "role": "delivery", "task_type": "deal_summary"},
                 ],
                 "edges": [
@@ -362,11 +372,21 @@ def get_default_gtm_workflow() -> list["WorkflowTemplate"]:
 
 def extend_plugin_workflows(local: list["WorkflowTemplate"]) -> list["WorkflowTemplate"]:
     """Append enterprise default DAGs that are not already present by template name."""
+    from app.integrations.workflow_capabilities import enrich_dag_config
+
+    def _normalize(template: "WorkflowTemplate") -> "WorkflowTemplate":
+        from app.industry_plugins.base_plugin import WorkflowTemplate
+
+        return WorkflowTemplate(
+            name=template.name,
+            dag_config=enrich_dag_config(template.dag_config),
+        )
+
     names = {t.name for t in local}
-    merged = list(local)
+    merged = [_normalize(t) for t in local]
     for t in get_default_gtm_workflow():
         if t.name not in names:
-            merged.append(t)
+            merged.append(_normalize(t))
             names.add(t.name)
     return merged
 

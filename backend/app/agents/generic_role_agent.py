@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 import json
-import re
 from typing import Any
-
+from app.agents.agent_tool_runner import parse_agent_json_output, run_agent_with_capability_tools
 from app.agents.base_agent import BaseAgent, TaskResult, TaskStub
-from app.services.llm import complete_chat
+from app.core.database import AsyncSessionLocal
 
 
 class GenericRoleAgent(BaseAgent):
@@ -28,29 +27,36 @@ class GenericRoleAgent(BaseAgent):
                     f"Your role id: {self.role}\n"
                     f"Task type: {task.type}\n"
                     f"Input JSON:\n{payload}\n\n"
+                    "You may call integration tools when needed (Slack, email, CRM, etc.). "
+                    "After tool use, respond with JSON only: "
+                    '{"summary": "string", "artifacts": {}, "next_actions": []}\n'
                     "Optional: task input may include invoke_capability (catalog id) and "
-                    "invoke_capability_params (object); those run after this JSON response.\n"
-                    "Respond with JSON only: "
-                    '{"summary": "string", "artifacts": {}, "next_actions": []}'
+                    "invoke_capability_params (object); those run after the JSON response."
                 ),
             },
         ]
-        text, tokens = await complete_chat(messages)
+        async with AsyncSessionLocal() as session:
+            text, tokens, tool_results = await run_agent_with_capability_tools(
+                tenant_id=self.tenant_id,
+                role=self.role,
+                messages=messages,
+                session=session,
+                correlation_id=task.id,
+                actor=f"agent:{self.agent_id}",
+            )
 
-        out: dict[str, Any] = {"raw": text}
-        try:
-            m = re.search(r"\{[\s\S]*\}", text)
-            if m:
-                out = json.loads(m.group())
-        except Exception:
-            pass
+        out = parse_agent_json_output(text)
+        if tool_results:
+            out["tool_results"] = tool_results
 
         invoke = task.input.get("invoke_capability")
         if isinstance(invoke, str) and invoke.strip():
             from app.integrations.executor import execute_capability
 
             raw_params = task.input.get("invoke_capability_params")
-            cap_params = raw_params if isinstance(raw_params, dict) else {}
+            cap_params = dict(raw_params) if isinstance(raw_params, dict) else {}
+            cap_params.setdefault("_correlation_id", task.id)
+            cap_params.setdefault("_actor", f"agent:{self.agent_id}")
             out["capability_result"] = await execute_capability(
                 invoke.strip(),
                 cap_params,

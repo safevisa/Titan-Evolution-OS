@@ -8,10 +8,9 @@ import time
 from typing import Any
 from urllib.parse import urlencode
 
-import httpx
-
 from app.core.config import settings
 from app.integrations.token_vault import decrypt_json, encrypt_json
+from app.integrations.transport import integration_request
 
 SLACK_BOT_SCOPES = "chat:write,channels:read,groups:read,im:read,im:write,mpim:write"
 TWITTER_SCOPES = "tweet.read tweet.write users.read offline.access"
@@ -103,74 +102,81 @@ def linkedin_authorize_url(*, tenant_id: str) -> str:
 
 
 async def exchange_slack_oauth_code(code: str) -> dict[str, Any]:
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        r = await client.post(
-            "https://slack.com/api/oauth.v2.access",
-            data={
-                "client_id": settings.slack_client_id,
-                "client_secret": settings.slack_client_secret,
-                "code": code,
-                "redirect_uri": slack_oauth_redirect_uri(),
-            },
-        )
-        data = r.json()
+    r = await integration_request(
+        "POST",
+        "https://slack.com/api/oauth.v2.access",
+        provider="slack_oauth",
+        timeout=30.0,
+        data={
+            "client_id": settings.slack_client_id,
+            "client_secret": settings.slack_client_secret,
+            "code": code,
+            "redirect_uri": slack_oauth_redirect_uri(),
+        },
+    )
+    data = r.json()
     if not data.get("ok"):
         raise ValueError(data.get("error", "slack_oauth_failed"))
     return data
 
 
 async def exchange_twitter_oauth_code(code: str, code_verifier: str) -> dict[str, Any]:
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        r = await client.post(
-            "https://api.twitter.com/2/oauth2/token",
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            auth=(settings.twitter_client_id or "", settings.twitter_client_secret or ""),
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": twitter_oauth_redirect_uri(),
-                "code_verifier": code_verifier,
-                "client_id": settings.twitter_client_id,
-            },
-        )
-        try:
-            data = r.json()
-        except Exception:
-            data = {"raw": r.text}
+    r = await integration_request(
+        "POST",
+        "https://api.twitter.com/2/oauth2/token",
+        provider="twitter_oauth",
+        timeout=30.0,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        auth=(settings.twitter_client_id or "", settings.twitter_client_secret or ""),
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": twitter_oauth_redirect_uri(),
+            "code_verifier": code_verifier,
+            "client_id": settings.twitter_client_id,
+        },
+    )
+    try:
+        data = r.json()
+    except Exception:
+        data = {"raw": r.text}
     if r.status_code != 200 or "access_token" not in data:
         raise ValueError(data.get("error_description") or data.get("error") or "twitter_token_failed")
     return data
 
 
 async def exchange_linkedin_oauth_code(code: str) -> dict[str, Any]:
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        r = await client.post(
-            "https://www.linkedin.com/oauth/v2/accessToken",
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": linkedin_oauth_redirect_uri(),
-                "client_id": settings.linkedin_client_id,
-                "client_secret": settings.linkedin_client_secret,
-            },
-        )
-        try:
-            data = r.json()
-        except Exception:
-            data = {"raw": r.text}
+    r = await integration_request(
+        "POST",
+        "https://www.linkedin.com/oauth/v2/accessToken",
+        provider="linkedin_oauth",
+        timeout=30.0,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": linkedin_oauth_redirect_uri(),
+            "client_id": settings.linkedin_client_id,
+            "client_secret": settings.linkedin_client_secret,
+        },
+    )
+    try:
+        data = r.json()
+    except Exception:
+        data = {"raw": r.text}
     if r.status_code != 200 or "access_token" not in data:
         raise ValueError(data.get("error_description") or data.get("error") or "linkedin_token_failed")
     return data
 
 
 async def fetch_linkedin_person_urn(access_token: str) -> tuple[str, dict[str, Any]]:
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        r = await client.get(
-            "https://api.linkedin.com/v2/userinfo",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        data = r.json()
+    r = await integration_request(
+        "GET",
+        "https://api.linkedin.com/v2/userinfo",
+        provider="linkedin_oauth",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    data = r.json()
     if r.status_code != 200:
         raise ValueError("linkedin_userinfo_failed")
     sub = str(data.get("sub", "")).strip()

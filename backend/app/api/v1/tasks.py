@@ -90,11 +90,18 @@ async def list_tasks(
     return list(res.scalars().all())
 
 
+class WorkflowNodeRead(BaseModel):
+    role: str | None = None
+    capability_id: str | None = None
+    label: str | None = None
+
+
 class WorkflowTemplateRead(BaseModel):
     index: int
     name: str
     node_count: int
     roles: list[str]
+    nodes: list[WorkflowNodeRead] = Field(default_factory=list)
 
 
 @router.get("/workflow-templates", response_model=list[WorkflowTemplateRead])
@@ -114,17 +121,28 @@ async def list_workflow_templates(
         dag = tmpl.dag_config or {}
         nodes = dag.get("nodes", [])
         roles: list[str] = []
+        node_reads: list[WorkflowNodeRead] = []
         for n in nodes:
-            if isinstance(n, dict) and n.get("role"):
-                r = str(n["role"])
-                if r not in roles:
-                    roles.append(r)
+            if not isinstance(n, dict):
+                continue
+            r = str(n["role"]) if n.get("role") else None
+            if r and r not in roles:
+                roles.append(r)
+            cap_id = n.get("capability_id")
+            node_reads.append(
+                WorkflowNodeRead(
+                    role=r,
+                    capability_id=str(cap_id) if cap_id else None,
+                    label=str(n["label"]) if n.get("label") else None,
+                )
+            )
         out.append(
             WorkflowTemplateRead(
                 index=i,
                 name=tmpl.name,
                 node_count=len(nodes) if isinstance(nodes, list) else 0,
                 roles=roles,
+                nodes=node_reads,
             )
         )
     return out

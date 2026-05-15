@@ -1,7 +1,6 @@
 from typing import Any
 
-from app.tools.apollo_tool import apollo_search_people
-from app.tools.resend_tool import resend_send_email
+from app.integrations.builtins_dispatch import run_builtin_capability
 
 
 def get_tools_for_role(role: str) -> list[str]:
@@ -14,8 +13,7 @@ def get_tools_for_role(role: str) -> list[str]:
 
 
 async def run_tool(name: str, **kwargs: Any) -> Any:
-    if name == "apollo_search":
-        return await apollo_search_people(**kwargs)
-    if name == "resend_email":
-        return await resend_send_email(**kwargs)
+    """Deprecated: use execute_capability / builtins_dispatch. Kept for legacy imports."""
+    if name in ("apollo_search", "resend_email"):
+        return await run_builtin_capability(name, dict(kwargs))
     raise ValueError(f"unknown tool {name}")

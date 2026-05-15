@@ -17,7 +17,18 @@ from app.integrations.connections_repo import (
     list_providers_for_tenant,
     upsert_encrypted_payload,
 )
-from app.integrations.executor import capability_list_for_api
+from app.integrations.agent_capabilities import list_agent_capabilities
+from app.integrations.agent_tool_bridge import capabilities_to_openai_tools
+from app.integrations.capability_metering import list_capability_usage
+from app.integrations.capability_packs import (
+    capability_refs_to_grant_ids,
+    get_capability_pack,
+    list_capability_packs,
+    merge_grant_ids,
+)
+from app.integrations.grants import enabled_capability_ids_explicit
+from app.integrations.executor import capability_list_for_api, execute_capability
+from app.integrations.oauth_token_refresh import attach_token_expiry
 from app.integrations.grants import INTEGRATION_GRANTS_KEY
 from app.integrations.credential_validate import validate_credential_payload
 from app.integrations.oauth_extended import (
@@ -89,6 +100,22 @@ class IntegrationGrantsBody(BaseModel):
     )
 
 
+class ApplyCapabilityPackBody(BaseModel):
+    pack_id: str = Field(..., min_length=2, max_length=64)
+    merge: bool = Field(
+        default=True,
+        description="If true, union pack capabilities with existing grants; if false, replace grants with pack only.",
+    )
+
+
+class ExecuteCapabilityBody(BaseModel):
+    capability_id: str = Field(..., min_length=2, max_length=160)
+    params: dict[str, Any] = Field(default_factory=dict)
+    idempotency_key: str | None = Field(default=None, max_length=160)
+    correlation_id: str | None = Field(default=None, max_length=128)
+    actor: str | None = Field(default=None, max_length=256)
+
+
 @router.get("/capabilities")
 async def list_capabilities(
     tenant_id: UUID = Query(..., description="Tenant UUID to evaluate policy + readiness flags"),
@@ -100,6 +127,139 @@ async def list_capabilities(
     cfg = tenant.config if isinstance(tenant.config, dict) else None
     provs = await list_providers_for_tenant(db, tenant_id)
     return capability_list_for_api(cfg, provs)
+
+
+@router.get("/tenants/{tenant_id}/agents/{role}/capabilities")
+async def list_agent_role_capabilities(
+    tenant_id: UUID,
+    role: str,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    tenant = await db.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="tenant not found")
+    cfg = tenant.config if isinstance(tenant.config, dict) else None
+    provs = await list_providers_for_tenant(db, tenant_id)
+    caps = list_agent_capabilities(role=role, tenant_config=cfg, connection_providers=provs)
+    tools, _name_map = capabilities_to_openai_tools(caps)
+    return {
+        "tenant_id": str(tenant_id),
+        "role": role,
+        "capabilities": caps,
+        "openai_tools": tools,
+    }
+
+
+@router.get("/capability-packs")
+async def list_capability_packs_http(
+    role: str | None = Query(default=None, max_length=64),
+) -> list[dict[str, Any]]:
+    return list_capability_packs(role=role)
+
+
+@router.get("/capability-packs/{pack_id}")
+async def get_capability_pack_http(pack_id: str) -> dict[str, Any]:
+    pack = get_capability_pack(pack_id)
+    if pack is None:
+        raise HTTPException(status_code=404, detail="capability pack not found")
+    return {
+        "id": pack.id,
+        "display_name": pack.display_name,
+        "description": pack.description,
+        "capability_refs": list(pack.capability_refs),
+        "roles_hint": list(pack.roles_hint),
+    }
+
+
+@router.get("/tenants/{tenant_id}/capability-usage")
+async def get_capability_usage_http(
+    tenant_id: UUID,
+    year: int | None = Query(default=None, ge=2020, le=2100),
+    month: int | None = Query(default=None, ge=1, le=12),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    if await db.get(Tenant, tenant_id) is None:
+        raise HTTPException(status_code=404, detail="tenant not found")
+    rows = await list_capability_usage(db, tenant_id, year=year, month=month)
+    return {"tenant_id": str(tenant_id), "usage": rows}
+
+
+@router.post("/tenants/{tenant_id}/capabilities/execute")
+async def execute_capability_http(
+    tenant_id: UUID,
+    body: ExecuteCapabilityBody,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    if await db.get(Tenant, tenant_id) is None:
+        raise HTTPException(status_code=404, detail="tenant not found")
+    params = dict(body.params)
+    if body.idempotency_key:
+        params["_idempotency_key"] = body.idempotency_key
+    if body.correlation_id:
+        params["_correlation_id"] = body.correlation_id
+    if body.actor:
+        params["_actor"] = body.actor
+    result = await execute_capability(
+        body.capability_id,
+        params,
+        tenant_id=str(tenant_id),
+        db=db,
+    )
+    await db.commit()
+    return result
+
+
+@router.post("/tenants/{tenant_id}/grants/apply-pack", response_model=dict[str, Any])
+async def apply_capability_pack_to_grants(
+    tenant_id: UUID,
+    body: ApplyCapabilityPackBody,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """One-click: enable all capabilities from a preset pack on the tenant allow-list."""
+    pack = get_capability_pack(body.pack_id)
+    if pack is None:
+        raise HTTPException(status_code=404, detail="capability pack not found")
+
+    tenant = await db.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="tenant not found")
+
+    pack_ids = capability_refs_to_grant_ids(pack.capability_refs)
+    if not pack_ids:
+        raise HTTPException(status_code=400, detail="pack has no resolvable capabilities")
+
+    cfg = tenant.config if isinstance(tenant.config, dict) else {}
+    current = enabled_capability_ids_explicit(cfg)
+    merged_ids = merge_grant_ids(current, pack_ids, merge=body.merge)
+
+    unknown = set(merged_ids) - all_capability_ids()
+    if unknown:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown capability ids after merge: {sorted(unknown)}",
+        )
+
+    merged = dict(cfg)
+    block = dict(merged.get(INTEGRATION_GRANTS_KEY) or {})
+    block["enabled_capability_ids"] = merged_ids
+    merged[INTEGRATION_GRANTS_KEY] = block
+    tenant.config = merged
+    await db.commit()
+    await db.refresh(tenant)
+
+    provs = await list_providers_for_tenant(db, tenant_id)
+    return {
+        "ok": True,
+        "tenant_id": str(tenant_id),
+        "pack_id": pack.id,
+        "added_from_pack": pack_ids,
+        "merge": body.merge,
+        INTEGRATION_GRANTS_KEY: tenant.config.get(INTEGRATION_GRANTS_KEY),
+        "capabilities": capability_list_for_api(
+            tenant.config if isinstance(tenant.config, dict) else None,
+            provs,
+        ),
+    }
 
 
 @router.patch("/tenants/{tenant_id}/grants", response_model=dict[str, Any])
@@ -329,11 +489,13 @@ async def oauth_twitter_callback(
         if not at:
             return _html_err("twitter token missing")
         meta = {"twitter_token_type": data.get("token_type", "bearer")}
-        secret = {
-            "access_token": at,
-            "refresh_token": str(data.get("refresh_token") or ""),
-            "expires_in": data.get("expires_in"),
-        }
+        secret = attach_token_expiry(
+            {
+                "access_token": at,
+                "refresh_token": str(data.get("refresh_token") or ""),
+            },
+            data,
+        )
         await upsert_encrypted_payload(db, tid, PROVIDER_TWITTER_OAUTH, payload=secret, meta=meta)
         await db.commit()
     except (ValueError, KeyError, IntegrationVaultError) as e:
@@ -384,11 +546,13 @@ async def oauth_linkedin_callback(
             "linkedin_person_urn": author,
             "linkedin_name": userinfo.get("name"),
         }
-        secret = {
-            "access_token": at,
-            "refresh_token": str(data.get("refresh_token") or ""),
-            "expires_in": data.get("expires_in"),
-        }
+        secret = attach_token_expiry(
+            {
+                "access_token": at,
+                "refresh_token": str(data.get("refresh_token") or ""),
+            },
+            data,
+        )
         await upsert_encrypted_payload(db, tid, PROVIDER_LINKEDIN_OAUTH, payload=secret, meta=meta)
         await db.commit()
     except (ValueError, KeyError, IntegrationVaultError) as e:
@@ -534,10 +698,13 @@ async def oauth_reddit_callback(
         at = str(data.get("access_token", ""))
         if not at:
             return _html_err("reddit token missing")
-        secret = {
-            "access_token": at,
-            "refresh_token": str(data.get("refresh_token") or ""),
-        }
+        secret = attach_token_expiry(
+            {
+                "access_token": at,
+                "refresh_token": str(data.get("refresh_token") or ""),
+            },
+            data,
+        )
         meta = {"reddit_token_type": data.get("token_type", "bearer")}
         await upsert_encrypted_payload(db, tid, PROVIDER_REDDIT_OAUTH, payload=secret, meta=meta)
         await db.commit()
@@ -585,10 +752,13 @@ async def oauth_google_youtube_callback(
         if not at:
             return _html_err("google token missing")
         ch = await google_youtube_fetch_channel_id(at)
-        secret = {
-            "access_token": at,
-            "refresh_token": str(data.get("refresh_token") or ""),
-        }
+        secret = attach_token_expiry(
+            {
+                "access_token": at,
+                "refresh_token": str(data.get("refresh_token") or ""),
+            },
+            data,
+        )
         meta = {"youtube_channel_id": ch}
         await upsert_encrypted_payload(db, tid, PROVIDER_GOOGLE_YOUTUBE_OAUTH, payload=secret, meta=meta)
         await db.commit()

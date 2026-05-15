@@ -94,9 +94,19 @@ class SaasB2BPlugin(IndustryPlugin):
                 name="Outbound PLG Pipeline",
                 dag_config={
                     "nodes": [
-                        {"id": "hunt", "role": "hunter", "task_type": "icp_search"},
+                        {
+                            "id": "hunt",
+                            "role": "hunter",
+                            "task_type": "icp_search",
+                            "capability_id": "apollo_search",
+                        },
                         {"id": "research", "role": "researcher", "task_type": "tech_stack_research"},
-                        {"id": "outreach", "role": "outreach", "task_type": "trial_invite"},
+                        {
+                            "id": "outreach",
+                            "role": "outreach",
+                            "task_type": "trial_invite",
+                            "capability_id": "resend_email",
+                        },
                         {"id": "deliver", "role": "delivery", "task_type": "sales_brief"},
                     ],
                     "edges": [

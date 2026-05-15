@@ -189,3 +189,46 @@ async def complete_chat(
     usage = getattr(resp, "usage", None)
     tokens = int(getattr(usage, "total_tokens", 0) or 0) if usage else 0
     return text, tokens
+
+
+def _message_tool_calls(msg: Any) -> list[dict[str, Any]]:
+    raw = getattr(msg, "tool_calls", None) or []
+    out: list[dict[str, Any]] = []
+    for tc in raw:
+        fn = getattr(tc, "function", None)
+        if fn is None:
+            continue
+        out.append(
+            {
+                "id": getattr(tc, "id", "") or "",
+                "type": "function",
+                "function": {
+                    "name": getattr(fn, "name", "") or "",
+                    "arguments": getattr(fn, "arguments", "{}") or "{}",
+                },
+            }
+        )
+    return out
+
+
+async def complete_chat_with_tools(
+    messages: list[dict[str, Any]],
+    *,
+    tools: list[dict[str, Any]],
+    model: str | None = None,
+    temperature: float = 0.2,
+) -> tuple[str, int, list[dict[str, Any]]]:
+    """Returns (assistant_text, total_tokens_or_0, tool_calls)."""
+    configure_llm_environment()
+
+    resp: Any = await acompletion(
+        model=model or settings.litellm_default_model,
+        messages=messages,
+        tools=tools,
+        temperature=temperature,
+    )
+    msg = resp.choices[0].message
+    text = getattr(msg, "content", None) or ""
+    usage = getattr(resp, "usage", None)
+    tokens = int(getattr(usage, "total_tokens", 0) or 0) if usage else 0
+    return text, tokens, _message_tool_calls(msg)

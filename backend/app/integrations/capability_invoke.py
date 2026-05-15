@@ -7,6 +7,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.integrations.connection_tokens import get_connection_secret
 from app.integrations.connections_repo import decrypt_row_secret, get_connection_row
 from app.integrations.providers import (
     PROVIDER_DISCORD_WEBHOOK,
@@ -89,7 +90,7 @@ async def invoke_external_capability(
         if capability_id == "slack_post_message":
             row_oauth = await get_connection_row(session, tenant_id, PROVIDER_SLACK_OAUTH)
             if row_oauth:
-                sec = decrypt_row_secret(row_oauth)
+                sec = await get_connection_secret(session, tenant_id, PROVIDER_SLACK_OAUTH) or {}
                 token = str(sec.get("access_token", ""))
                 if not token:
                     return {"ok": False, "error": "invalid_slack_oauth_token"}
@@ -115,7 +116,7 @@ async def invoke_external_capability(
             row = await get_connection_row(session, tenant_id, PROVIDER_TWITTER_OAUTH)
             if not row:
                 return {"ok": False, "error": "missing_twitter_oauth_connection"}
-            sec = decrypt_row_secret(row)
+            sec = await get_connection_secret(session, tenant_id, PROVIDER_TWITTER_OAUTH) or {}
             token = str(sec.get("access_token", ""))
             if not token:
                 return {"ok": False, "error": "invalid_twitter_token"}
@@ -127,7 +128,7 @@ async def invoke_external_capability(
             row = await get_connection_row(session, tenant_id, PROVIDER_LINKEDIN_OAUTH)
             if not row:
                 return {"ok": False, "error": "missing_linkedin_oauth_connection"}
-            sec = decrypt_row_secret(row)
+            sec = await get_connection_secret(session, tenant_id, PROVIDER_LINKEDIN_OAUTH) or {}
             token = str(sec.get("access_token", ""))
             meta = row.meta if isinstance(row.meta, dict) else {}
             author = str(meta.get("linkedin_person_urn", "")).strip()
@@ -217,7 +218,7 @@ async def invoke_external_capability(
             row = await get_connection_row(session, tenant_id, PROVIDER_REDDIT_OAUTH)
             if not row:
                 return {"ok": False, "error": "missing_reddit_oauth_connection"}
-            sec = decrypt_row_secret(row)
+            sec = await get_connection_secret(session, tenant_id, PROVIDER_REDDIT_OAUTH) or {}
             token = str(sec.get("access_token", ""))
             if not token:
                 return {"ok": False, "error": "invalid_reddit_token"}
@@ -237,7 +238,7 @@ async def invoke_external_capability(
             row = await get_connection_row(session, tenant_id, PROVIDER_GOOGLE_YOUTUBE_OAUTH)
             if not row:
                 return {"ok": False, "error": "missing_youtube_oauth_connection"}
-            sec = decrypt_row_secret(row)
+            sec = await get_connection_secret(session, tenant_id, PROVIDER_GOOGLE_YOUTUBE_OAUTH) or {}
             token = str(sec.get("access_token", ""))
             meta = row.meta if isinstance(row.meta, dict) else {}
             channel_id = str(meta.get("youtube_channel_id", "")).strip()

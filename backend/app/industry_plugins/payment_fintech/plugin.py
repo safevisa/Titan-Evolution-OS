@@ -104,9 +104,19 @@ class PaymentFintechPlugin(IndustryPlugin):
                 name="Full GTM Pipeline",
                 dag_config={
                     "nodes": [
-                        {"id": "hunt", "role": "hunter", "task_type": "lead_search"},
+                        {
+                            "id": "hunt",
+                            "role": "hunter",
+                            "task_type": "lead_search",
+                            "capability_id": "apollo_search",
+                        },
                         {"id": "research", "role": "researcher", "task_type": "company_research"},
-                        {"id": "outreach", "role": "outreach", "task_type": "email_write"},
+                        {
+                            "id": "outreach",
+                            "role": "outreach",
+                            "task_type": "email_write",
+                            "capability_id": "resend_email",
+                        },
                         {"id": "deliver", "role": "delivery", "task_type": "deal_summary"},
                     ],
                     "edges": [
@@ -120,8 +130,18 @@ class PaymentFintechPlugin(IndustryPlugin):
                 name="Quick Outreach",
                 dag_config={
                     "nodes": [
-                        {"id": "hunt", "role": "hunter", "task_type": "lead_search"},
-                        {"id": "outreach", "role": "outreach", "task_type": "email_write"},
+                        {
+                            "id": "hunt",
+                            "role": "hunter",
+                            "task_type": "lead_search",
+                            "capability_id": "apollo_search",
+                        },
+                        {
+                            "id": "outreach",
+                            "role": "outreach",
+                            "task_type": "email_write",
+                            "capability_id": "resend_email",
+                        },
                     ],
                     "edges": [{"from": "hunt", "to": "outreach"}],
                 },
