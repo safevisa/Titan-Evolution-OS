@@ -28,6 +28,8 @@ class GenericRoleAgent(BaseAgent):
                     f"Your role id: {self.role}\n"
                     f"Task type: {task.type}\n"
                     f"Input JSON:\n{payload}\n\n"
+                    "Optional: task input may include invoke_capability (catalog id) and "
+                    "invoke_capability_params (object); those run after this JSON response.\n"
                     "Respond with JSON only: "
                     '{"summary": "string", "artifacts": {}, "next_actions": []}'
                 ),
@@ -42,5 +44,17 @@ class GenericRoleAgent(BaseAgent):
                 out = json.loads(m.group())
         except Exception:
             pass
+
+        invoke = task.input.get("invoke_capability")
+        if isinstance(invoke, str) and invoke.strip():
+            from app.integrations.executor import execute_capability
+
+            raw_params = task.input.get("invoke_capability_params")
+            cap_params = raw_params if isinstance(raw_params, dict) else {}
+            out["capability_result"] = await execute_capability(
+                invoke.strip(),
+                cap_params,
+                tenant_id=self.tenant_id,
+            )
 
         return TaskResult(output=out, token_used=tokens)

@@ -1,6 +1,8 @@
 """Apollo.io people/company search — gracefully skips when key not configured."""
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 
 from app.core.config import settings
@@ -42,3 +44,19 @@ async def search_leads(criteria: dict) -> list[dict]:
             ]
     except Exception:
         return []
+
+
+async def apollo_search_people(**kwargs: Any) -> list[dict]:
+    """Adapter for `tool_registry` / integrations — forwards to `search_leads`."""
+    criteria: dict[str, Any] = {
+        "domains": kwargs.get("domains", []),
+        "titles": kwargs.get("titles", []),
+        "industry_ids": kwargs.get("industry_ids", []),
+        "limit": kwargs.get("limit", 10),
+    }
+    extra = kwargs.get("criteria")
+    if isinstance(extra, dict):
+        for k in ("domains", "titles", "industry_ids", "limit"):
+            if k in extra and extra[k] is not None:
+                criteria[k] = extra[k]
+    return await search_leads(criteria)

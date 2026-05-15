@@ -46,6 +46,31 @@ class Settings(BaseSettings):
     db_echo: bool = False
     # Shared secret for POST /api/v1/admin/* (must match frontend server env TITAN_ADMIN_API_KEY).
     titan_admin_api_key: Optional[str] = None
+    # Fernet key (urlsafe base64 32-byte) for encrypting integration tokens / webhook URLs at rest.
+    titan_integrations_fernet_key: Optional[str] = None
+    # Public API base URL (no trailing slash), used for OAuth redirect_uri, e.g. https://api.example.com
+    titan_api_public_base_url: Optional[str] = None
+    # Slack OAuth (optional; enables "Add to Slack" flow for slack_post_message).
+    slack_client_id: Optional[str] = None
+    slack_client_secret: Optional[str] = None
+    # X (Twitter) OAuth 2.0 — confidential client with PKCE.
+    twitter_client_id: Optional[str] = None
+    twitter_client_secret: Optional[str] = None
+    # LinkedIn OAuth 2.0 (Share on LinkedIn / member posts).
+    linkedin_client_id: Optional[str] = None
+    linkedin_client_secret: Optional[str] = None
+    # Meta Facebook / Instagram (OAuth for Page + optional IG business account).
+    facebook_app_id: Optional[str] = None
+    facebook_app_secret: Optional[str] = None
+    # Sina Weibo OAuth.
+    weibo_app_key: Optional[str] = None
+    weibo_app_secret: Optional[str] = None
+    # Reddit OAuth (script / web app).
+    reddit_client_id: Optional[str] = None
+    reddit_client_secret: Optional[str] = None
+    # Google OAuth for YouTube Data API (separate from GOOGLE_API_KEY / Gemini).
+    google_oauth_client_id: Optional[str] = None
+    google_oauth_client_secret: Optional[str] = None
 
 
 settings = Settings()

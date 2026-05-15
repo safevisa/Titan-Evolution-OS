@@ -30,6 +30,18 @@ run tasks, and let the system automatically improve agent prompts over time.
 9. `GET /api/v1/evolution/status` — view KPI scores and trigger evolution
 10. `POST /api/v1/admin/sync-all-enterprise-rosters` — bulk roster sync (requires `X-Titan-Admin-Key` = `TITAN_ADMIN_API_KEY` on the API server)
 11. `GET /api/v1/admin/tenants-overview` — tenant list for operators (same header)
+12. `GET /api/v1/integrations/capabilities?tenant_id=` — external tool catalog + tenant grant / server readiness flags
+13. `PATCH /api/v1/integrations/tenants/{tenant_id}/grants` — set `enabled_capability_ids` (stubs need explicit grant; live tools need env keys)
+14. `POST /api/v1/integrations/tenants/{tenant_id}/connections/webhook` — save Discord/Slack/Feishu/WeChat Work webhook (encrypted); requires `TITAN_INTEGRATIONS_FERNET_KEY`
+15. `GET /api/v1/integrations/tenants/{tenant_id}/connections` — list connected providers (no secrets)
+16. `GET /api/v1/integrations/oauth/slack/start?tenant_id=` — Slack OAuth (needs `TITAN_API_PUBLIC_BASE_URL` + Slack app credentials)
+17. `GET /api/v1/integrations/oauth/twitter/start?tenant_id=` — X OAuth 2 PKCE
+18. `GET /api/v1/integrations/oauth/linkedin/start?tenant_id=` — LinkedIn OAuth
+19. `POST /api/v1/integrations/tenants/{tenant_id}/connections/credential` — Telegram / WhatsApp Cloud / 微信公众号凭证（加密）
+20. `GET /api/v1/integrations/oauth/facebook/start?tenant_id=` — Facebook Page + 可选 Instagram 商业号
+21. `GET /api/v1/integrations/oauth/weibo/start?tenant_id=` — 新浪微博 OAuth
+22. `GET /api/v1/integrations/oauth/reddit/start?tenant_id=` — Reddit OAuth
+23. `GET /api/v1/integrations/oauth/google-youtube/start?tenant_id=` — YouTube Data（发评论等）
 
 ### Authentication
 Currently open — JWT auth planned for Phase 5 production release.

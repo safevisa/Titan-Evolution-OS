@@ -1,6 +1,8 @@
 """Resend email sending — gracefully skips when key not configured."""
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 
 from app.core.config import settings
@@ -22,3 +24,13 @@ async def send_email(*, to: str, subject: str, body: str) -> bool:
             return resp.status_code == 200
     except Exception:
         return False
+
+
+async def resend_send_email(**kwargs: Any) -> bool:
+    """Adapter for `tool_registry` / integrations."""
+    to = kwargs.get("to")
+    if not to:
+        return False
+    subject = str(kwargs.get("subject", ""))
+    body = str(kwargs.get("body", ""))
+    return await send_email(to=str(to), subject=subject, body=body)

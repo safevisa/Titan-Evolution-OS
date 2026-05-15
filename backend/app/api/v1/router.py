@@ -1,11 +1,12 @@
 from fastapi import APIRouter
 
-from app.api.v1 import admin, agents, analytics, billing, bootstrap, crm, evolution, llm, memory, tasks, tenants
+from app.api.v1 import admin, agents, analytics, billing, bootstrap, crm, evolution, integrations, llm, memory, tasks, tenants
 
 api_router = APIRouter()
 api_router.include_router(bootstrap.router)
 api_router.include_router(admin.router)
 api_router.include_router(tenants.router)
+api_router.include_router(integrations.router)
 api_router.include_router(agents.router)
 api_router.include_router(tasks.router)
 api_router.include_router(llm.router)
