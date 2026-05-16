@@ -631,11 +631,6 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
     });
   };
 
-  const applySelectedPack = async () => {
-    if (!capabilityPackId) return;
-    await applyPackById(capabilityPackId);
-  };
-
   const launchTask = async () => {
     if (!tenantId || !selectedAgent || !goal.trim()) return;
     setLaunching(true);
