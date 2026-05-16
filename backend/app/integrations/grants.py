@@ -67,6 +67,15 @@ def can_execute_capability(
             return False, "stub_requires_explicit_grant"
         return False, "stub_not_implemented"
 
+    if cap.id.startswith("computer_use_"):
+        from app.computer_use.orchestrator import computer_use_enabled
+
+        if not computer_use_enabled(tenant_config):
+            return False, "computer_use_disabled"
+        if cap.env_keys and not server_env_ready(cap):
+            return False, "missing_server_credentials"
+        return True, "ok"
+
     if cap.connection_provider_any:
         if not has_user_connection(cap, connection_providers):
             return False, "missing_user_connection"

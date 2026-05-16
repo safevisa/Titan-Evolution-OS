@@ -96,11 +96,31 @@ services:
       GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET: ${GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET:-}
       GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
       GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
+      COMPUTER_USE_RUNNER_URL: ${COMPUTER_USE_RUNNER_URL:-http://computer-use-runner:8090}
+      COMPUTER_USE_RUNNER_TOKEN: ${COMPUTER_USE_RUNNER_TOKEN:-dev-runner-token}
+      EXA_API_KEY: ${EXA_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  computer-use-runner:
+    build:
+      context: ./computer-use-runner
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8090:8090"
+    environment:
+      COMPUTER_USE_RUNNER_TOKEN: ${COMPUTER_USE_RUNNER_TOKEN:-dev-runner-token}
+      AGENT_S_MODE: ${AGENT_S_MODE:-stub}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      COMPUTER_USE_GROUND_URL: ${COMPUTER_USE_GROUND_URL:-}
+      COMPUTER_USE_GROUND_MODEL: ${COMPUTER_USE_GROUND_MODEL:-ui-tars-1.5-7b}
+      COMPUTER_USE_ARTIFACT_DIR: /var/titan/cu-artifacts
+      DISPLAY: ":99"
+    volumes:
+      - titan_cu_artifacts:/var/titan/cu-artifacts
 
   celery_worker:
     build:
@@ -165,11 +185,16 @@ services:
       GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET: ${GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET:-}
       GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
       GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
+      COMPUTER_USE_RUNNER_URL: ${COMPUTER_USE_RUNNER_URL:-http://computer-use-runner:8090}
+      COMPUTER_USE_RUNNER_TOKEN: ${COMPUTER_USE_RUNNER_TOKEN:-dev-runner-token}
+      EXA_API_KEY: ${EXA_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      computer-use-runner:
+        condition: service_started
 
   celery_beat:
     build:
@@ -222,3 +247,4 @@ services:
 volumes:
   titan_pg_data:
   titan_qdrant_data:
+  titan_cu_artifacts:

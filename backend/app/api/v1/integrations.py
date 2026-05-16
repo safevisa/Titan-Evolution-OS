@@ -254,6 +254,10 @@ async def apply_capability_pack_to_grants(
     block = dict(merged.get(INTEGRATION_GRANTS_KEY) or {})
     block["enabled_capability_ids"] = merged_ids
     merged[INTEGRATION_GRANTS_KEY] = block
+    if body.pack_id == "desktop_automation":
+        cu = dict(merged.get("computer_use") or {})
+        cu["enabled"] = True
+        merged["computer_use"] = cu
     tenant.config = merged
     await db.commit()
     await db.refresh(tenant)

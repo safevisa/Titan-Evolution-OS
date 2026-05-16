@@ -296,10 +296,29 @@
       "capabilityPacks": {
         "title": "能力包",
         "contextSync": "上下文同步",
-        "desktopAutomation": "桌面自动化",
+        "desktopAutomation": "桌面自动化（Agent-S）",
         "apply": "应用",
         "applying": "应用中…",
         "applied": "能力包已应用。"
+      },
+      "computerUse": {
+        "title": "计算机使用（Agent-S 云沙箱）",
+        "overview": "在独立 Runner 中通过 simular-ai/Agent-S 执行 GUI 自动化。请先应用「桌面自动化」能力包，再提交测试指令。",
+        "instructionPlaceholder": "例如：打开系统设置并查看显示分辨率",
+        "submit": "提交任务",
+        "submitting": "提交中…",
+        "pollStatus": "刷新状态",
+        "runId": "运行 ID",
+        "status": "状态",
+        "steps": "步数",
+        "runnerHint": "需配置 Runner 地址（COMPUTER_USE_RUNNER_URL）。默认 stub 模式无需 GPU。",
+        "enableHint": "应用「桌面自动化」能力包以启用租户 computer_use。",
+        "disabled": "当前工作区未启用计算机使用。",
+        "queued": "排队中",
+        "running": "运行中",
+        "success": "成功",
+        "failed": "失败",
+        "cancelled": "已取消"
       },
       "errors": {
         "load_failed": "加载集成数据失败。",
@@ -307,7 +326,9 @@
         "sync_failed": "同步失败，请检查连接与租户 context_sync.enabled。",
         "sync_triggered": "已开始同步，请稍后刷新状态。",
         "pack_failed": "应用能力包失败。",
-        "pack_applied": "能力包已应用。"
+        "pack_applied": "能力包已应用。",
+        "computer_use_submit_failed": "提交计算机使用任务失败。",
+        "computer_use_submitted": "任务已提交，请稍后刷新状态。"
       }
     },
     "evolutionPage": {

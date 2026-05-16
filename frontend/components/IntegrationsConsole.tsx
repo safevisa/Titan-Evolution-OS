@@ -32,6 +32,26 @@ export type CapabilityPackLabels = {
   applied: string;
 };
 
+export type ComputerUseLabels = {
+  title: string;
+  overview: string;
+  instructionPlaceholder: string;
+  submit: string;
+  submitting: string;
+  pollStatus: string;
+  runId: string;
+  status: string;
+  steps: string;
+  runnerHint: string;
+  enableHint: string;
+  disabled: string;
+  queued: string;
+  running: string;
+  success: string;
+  failed: string;
+  cancelled: string;
+};
+
 export type IntegrationsLabels = {
   title: string;
   subtitle: string;
@@ -56,6 +76,7 @@ export type IntegrationsLabels = {
   executeBlocked: string;
   contextSync: ContextSyncLabels;
   capabilityPacks: CapabilityPackLabels;
+  computerUse: ComputerUseLabels;
   errors: Record<string, string>;
 };
 
@@ -150,6 +171,7 @@ export function IntegrationsConsole({
   const { tenantId } = useAuth();
   const cs = labels.contextSync;
   const packs = labels.capabilityPacks;
+  const cu = labels.computerUse;
   const [capabilities, setCapabilities] = useState<CapabilityRow[]>([]);
   const [connections, setConnections] = useState<ConnectionRow[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatusResponse | null>(null);
@@ -160,12 +182,23 @@ export function IntegrationsConsole({
   const [webhookUrl, setWebhookUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [cuInstruction, setCuInstruction] = useState("");
+  const [cuRunId, setCuRunId] = useState("");
+  const [cuRunStatus, setCuRunStatus] = useState("");
+  const [cuStepCount, setCuStepCount] = useState<number | null>(null);
+  const [cuSubmitting, setCuSubmitting] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const connectionSet = useMemo(
     () => new Set(connections.map((c) => c.provider)),
     [connections],
   );
+
+  const computerUseCap = useMemo(
+    () => capabilities.find((c) => c.id === "computer_use_submit"),
+    [capabilities],
+  );
+  const computerUseReady = Boolean(computerUseCap?.can_execute_now);
 
   const loadSyncStatus = useCallback(async () => {
     if (!tenantId) return;
@@ -237,6 +270,50 @@ export function IntegrationsConsole({
     } finally {
       setSyncing(false);
     }
+  };
+
+  const submitComputerUse = async () => {
+    if (!tenantId || !cuInstruction.trim()) return;
+    setCuSubmitting(true);
+    setMessage("");
+    try {
+      const res = await fetch(apiUrl(`/api/v1/integrations/tenants/${tenantId}/capabilities/execute`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          capability_id: "computer_use_submit",
+          params: { instruction: cuInstruction.trim(), max_steps: 30 },
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        setMessage("computer_use_submit_failed");
+        return;
+      }
+      const runId = data.data?.run_id as string | undefined;
+      if (runId) setCuRunId(runId);
+      setMessage("computer_use_submitted");
+      setCuRunStatus("queued");
+    } finally {
+      setCuSubmitting(false);
+    }
+  };
+
+  const pollComputerUse = async () => {
+    if (!tenantId || !cuRunId) return;
+    const res = await fetch(apiUrl(`/api/v1/integrations/tenants/${tenantId}/capabilities/execute`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        capability_id: "computer_use_status",
+        params: { run_id: cuRunId },
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok || !data.data) return;
+    const row = data.data as { status?: string; step_count?: number };
+    setCuRunStatus(String(row.status || ""));
+    if (typeof row.step_count === "number") setCuStepCount(row.step_count);
   };
 
   const applyPack = async (packId: string) => {
@@ -401,6 +478,57 @@ export function IntegrationsConsole({
             </button>
           ))}
         </div>
+      </section>
+
+      <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+        <h2 className="text-sm font-medium text-zinc-200">{cu.title}</h2>
+        <p className="text-xs text-zinc-500">{cu.overview}</p>
+        <p className="text-xs text-zinc-500">{cu.runnerHint}</p>
+        {!computerUseReady ? (
+          <p className="text-xs text-amber-500/90">{cu.enableHint}</p>
+        ) : null}
+        <textarea
+          value={cuInstruction}
+          onChange={(e) => setCuInstruction(e.target.value)}
+          placeholder={cu.instructionPlaceholder}
+          rows={3}
+          className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-200"
+        />
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={cuSubmitting || !computerUseReady || !cuInstruction.trim()}
+            onClick={() => void submitComputerUse()}
+            className="rounded bg-violet-700 px-3 py-1.5 text-xs text-white hover:bg-violet-600 disabled:opacity-50"
+          >
+            {cuSubmitting ? cu.submitting : cu.submit}
+          </button>
+          <button
+            type="button"
+            disabled={!cuRunId}
+            onClick={() => void pollComputerUse()}
+            className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+          >
+            {cu.pollStatus}
+          </button>
+        </div>
+        {cuRunId ? (
+          <div className="space-y-1 text-xs text-zinc-400">
+            <p>
+              {cu.runId}: <span className="text-zinc-200">{cuRunId}</span>
+            </p>
+            {cuRunStatus ? (
+              <p>
+                {cu.status}: <span className="text-zinc-200">{cuRunStatus}</span>
+              </p>
+            ) : null}
+            {cuStepCount !== null ? (
+              <p>
+                {cu.steps}: <span className="text-zinc-200">{cuStepCount}</span>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </section>
 
       <section className="space-y-3">

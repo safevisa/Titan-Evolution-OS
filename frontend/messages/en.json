@@ -295,10 +295,29 @@
       "capabilityPacks": {
         "title": "Capability packs",
         "contextSync": "Context sync",
-        "desktopAutomation": "Desktop automation",
+        "desktopAutomation": "Desktop automation (Agent-S)",
         "apply": "Apply",
         "applying": "Applying…",
         "applied": "Capability pack applied."
+      },
+      "computerUse": {
+        "title": "Computer use (Agent-S cloud sandbox)",
+        "overview": "Runs GUI automation in an isolated runner via simular-ai/Agent-S. Apply the Desktop automation pack, then enable and submit a test instruction.",
+        "instructionPlaceholder": "e.g. Open Settings and check display resolution",
+        "submit": "Submit run",
+        "submitting": "Submitting…",
+        "pollStatus": "Refresh status",
+        "runId": "Run ID",
+        "status": "Status",
+        "steps": "Steps",
+        "runnerHint": "Runner must be reachable (COMPUTER_USE_RUNNER_URL). Default mode is stub without GPU.",
+        "enableHint": "Apply Desktop automation pack to enable tenant computer_use.",
+        "disabled": "Computer use is not enabled for this workspace.",
+        "queued": "Queued",
+        "running": "Running",
+        "success": "Success",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
       },
       "errors": {
         "load_failed": "Failed to load integrations.",
@@ -306,7 +325,9 @@
         "sync_failed": "Sync failed. Check connections and tenant context_sync.enabled.",
         "sync_triggered": "Sync started. Refresh status in a moment.",
         "pack_failed": "Failed to apply capability pack.",
-        "pack_applied": "Capability pack applied."
+        "pack_applied": "Capability pack applied.",
+        "computer_use_submit_failed": "Failed to submit computer use run.",
+        "computer_use_submitted": "Run submitted. Refresh status in a moment."
       }
     },
     "evolutionPage": {
