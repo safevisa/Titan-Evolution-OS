@@ -13,6 +13,7 @@ from app.models.domain import Agent
 VALID_SMART_TASK_TYPES: frozenset[str] = frozenset(
     {
         "goal_pipeline",
+        "parallel_team",
         "lead_search",
         "icp_search",
         "partner_discovery",
@@ -35,6 +36,22 @@ VALID_SMART_TASK_TYPES: frozenset[str] = frozenset(
 def infer_task_type_from_goal(goal: str) -> str:
     """Keyword / phrase routing (zh + en). Defaults to company-wide research."""
     g = (goal or "").strip().lower()
+
+    if any(
+        kw in g
+        for kw in (
+            "并行",
+            "同时",
+            "parallel",
+            "parallel team",
+            "team mode",
+            "多 agent",
+            "多agent",
+            "sub-agent",
+            "子任务",
+        )
+    ):
+        return "parallel_team"
 
     if any(
         kw in g
@@ -107,7 +124,7 @@ def infer_task_type_from_goal(goal: str) -> str:
 
 def _preferred_roles_for_task(task_type: str) -> list[str]:
     """Order matters: first match wins."""
-    if task_type == "goal_pipeline":
+    if task_type in ("goal_pipeline", "parallel_team"):
         return ["manager", "researcher", "hunter", "outreach", "delivery"]
     if task_type in ("lead_search", "icp_search", "partner_discovery"):
         return ["hunter", "researcher", "manager", "outreach", "delivery"]

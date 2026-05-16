@@ -20,6 +20,14 @@ type Summary = {
 type AgentRow = { id: string; name: string; role: string; status: string; task_count: number; avg_score: number | null };
 type TaskRow = { id: string; type: string; status: string; token_used: number; duration_ms: number | null; created_at: string };
 
+export type DashboardLabels = {
+  harnessTitle?: string;
+  harnessSubtitle?: string;
+  harnessContextSync?: string;
+  harnessIntegrations?: string;
+  harnessUltrawork?: string;
+};
+
 const STATUS_COLOR: Record<string, string> = { done: C.green, running: C.accent, failed: C.red, pending: C.amber };
 const ROLE_ICON: Record<string, string> = { hunter: "🎯", researcher: "🔬", outreach: "✉️", delivery: "📦", manager: "🧠" };
 
@@ -38,7 +46,7 @@ function StatCard({ label, value, sub, color = C.accent, icon }: { label: string
   );
 }
 
-export function DashboardConsole() {
+export function DashboardConsole({ labels = {} }: { labels?: DashboardLabels }) {
   const { tenantId, user } = useAuth();
   const params = useParams();
   const locale = (params?.locale as string) ?? "en";
@@ -130,6 +138,26 @@ export function DashboardConsole() {
           {loading ? "…" : "↻ Refresh"}
         </button>
       </div>
+
+      {labels.harnessTitle ? (
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "18px 22px", marginBottom: 20 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 6 }}>{labels.harnessTitle}</h3>
+          {labels.harnessSubtitle ? (
+            <p style={{ fontSize: 12, color: C.textMid, marginBottom: 14, lineHeight: 1.5 }}>{labels.harnessSubtitle}</p>
+          ) : null}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <Link href={`/${locale}/settings/integrations`} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.surfaceHigh, color: C.text, textDecoration: "none", fontSize: 12 }}>
+              {labels.harnessContextSync ?? "Context Sync"}
+            </Link>
+            <Link href={`/${locale}/settings/integrations`} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.surfaceHigh, color: C.textMid, textDecoration: "none", fontSize: 12 }}>
+              {labels.harnessIntegrations ?? "Integrations"}
+            </Link>
+            <Link href={`/${locale}/tasks?harness=ultrawork`} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${C.accent}55`, background: `${C.accent}18`, color: C.accent, textDecoration: "none", fontSize: 12, fontWeight: 600 }}>
+              {labels.harnessUltrawork ?? "Ultrawork launch"}
+            </Link>
+          </div>
+        </div>
+      ) : null}
 
       {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>

@@ -66,7 +66,12 @@
       "noAgents": "No agents yet.",
       "refresh": "Refresh",
       "score": "Score",
-      "tasks": "Tasks"
+      "tasks": "Tasks",
+      "harnessTitle": "Discipline harness",
+      "harnessSubtitle": "Context sync, integrations, and ultrawork-style persistent agents (inspired by oh-my-openagent patterns).",
+      "harnessContextSync": "Context Sync — Gmail, Calendar, GitHub",
+      "harnessIntegrations": "Manage integrations",
+      "harnessUltrawork": "Launch with Ultrawork"
     },
     "tasksPage": {
       "title": "Task center",
@@ -94,6 +99,10 @@
       "capabilityPackLabel": "Capability pack (reference)",
       "capabilityPackHint": "Preset integration bundles for digital employee roles — configure grants in Integrations settings.",
       "capabilityPackApplyHint": "Selected pack is merged into tenant grants before launch.",
+      "ultraworkLabel": "Ultrawork mode",
+      "ultraworkHint": "More tool rounds until the goal is done (omo-inspired discipline harness). Applies discipline_ultrawork capability pack when enabled.",
+      "parallelTeamLabel": "Parallel team",
+      "parallelTeamHint": "Manager decomposes the goal into parallel sub-agents (Celery). Applies parallel_team capability pack when enabled.",
       "computerUseTitle": "Desktop automation run",
       "computerUseRunId": "Run ID",
       "computerUseStatus": "Status",
@@ -122,6 +131,7 @@
       "syncRosterDone": "Roster sync: +{a} new agents, reactivated {r}, +{s} skills",
       "taskTypeLabels": {
         "goal_pipeline": "Collaborative pipeline (full GTM)",
+        "parallel_team": "Parallel team (sub-agents)",
         "lead_search": "Lead search",
         "icp_search": "ICP search",
         "partner_discovery": "Partner discovery",

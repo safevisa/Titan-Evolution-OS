@@ -27,14 +27,14 @@ celery_app.conf.update(
             "task": "titan.context_sync.rollup",
             "schedule": 21600,
         },
-        # TEO-DUAL M03: uncomment when computer_use.tasks is registered
-        # "computer-use-reaper": {
-        #     "task": "titan.computer_use.reaper",
-        #     "schedule": 900,
-        # },
+        "computer-use-reaper": {
+            "task": "titan.computer_use.reaper",
+            "schedule": 900,
+        },
     },
 )
 
 import app.workers.tasks  # noqa: E402, F401 — register tasks
 import app.workers.evolution_worker  # noqa: E402, F401 — register evolution tasks
 import app.context_sync.tasks  # noqa: E402, F401 — register context sync tasks
+import app.computer_use.tasks  # noqa: E402, F401 — register computer use tasks

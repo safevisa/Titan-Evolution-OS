@@ -34,6 +34,18 @@ class SmartTaskCreate(BaseModel):
     goal: str = Field(min_length=1, max_length=8000)
     workflow_name: Optional[str] = None
     workflow_index: Optional[int] = None
+    harness_mode: Optional[str] = Field(
+        default=None,
+        description="standard | ultrawork | plan_first — omo-inspired discipline harness.",
+    )
+    ultrawork: Optional[bool] = Field(
+        default=None,
+        description="Shorthand for harness_mode=ultrawork.",
+    )
+    task_type: Optional[str] = Field(
+        default=None,
+        description="Force task type (e.g. parallel_team) instead of LLM routing.",
+    )
     agent_id: Optional[UUID] = Field(
         default=None,
         description="Optional: force this active agent as primary executor (must belong to tenant).",
@@ -208,6 +220,13 @@ async def create_smart_task(body: SmartTaskCreate, db: AsyncSession = Depends(ge
         user_workflow_name=body.workflow_name,
     )
     task_type = plan.task_type
+    if body.task_type and body.task_type.strip():
+        forced_tt = body.task_type.strip()
+        from app.services.task_smart_routing import VALID_SMART_TASK_TYPES
+
+        if forced_tt not in VALID_SMART_TASK_TYPES:
+            raise HTTPException(status_code=400, detail=f"invalid task_type: {forced_tt}")
+        task_type = forced_tt
 
     if body.agent_id is not None:
         forced = await db.get(Agent, body.agent_id)
@@ -227,7 +246,9 @@ async def create_smart_task(body: SmartTaskCreate, db: AsyncSession = Depends(ge
             body.tenant_id,
             task_type,
             forced_agent_id=None,
-            coordinator_role_hint=plan.coordinator_role if task_type == "goal_pipeline" else None,
+            coordinator_role_hint=plan.coordinator_role
+            if task_type in ("goal_pipeline", "parallel_team")
+            else None,
         )
     if agent is None:
         raise HTTPException(
@@ -243,8 +264,17 @@ async def create_smart_task(body: SmartTaskCreate, db: AsyncSession = Depends(ge
             "workflow_index": plan.workflow_index,
             "workflow_name": plan.workflow_name,
             "coordinator_role": plan.coordinator_role,
+            "true_intent": plan.true_intent,
+            "success_criteria": plan.success_criteria,
         },
     }
+    if body.ultrawork:
+        inp["ultrawork"] = True
+        inp["harness_mode"] = "ultrawork"
+    elif body.harness_mode and body.harness_mode.strip():
+        inp["harness_mode"] = body.harness_mode.strip().lower()
+    if task_type == "parallel_team":
+        inp["auto_decompose"] = True
     wf_template_name: str | None = None
     wf_idx_out: int | None = None
     if task_type == "goal_pipeline":

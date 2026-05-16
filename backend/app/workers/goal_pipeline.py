@@ -1,6 +1,7 @@
 """Multi-step business goals: industry workflow DAG with per-role active agents."""
 from __future__ import annotations
 
+import asyncio
 import json
 from collections import deque
 from typing import Any
@@ -42,6 +43,27 @@ def _topo_ordered_nodes(nodes: list[dict[str, Any]], edges: list[dict[str, str]]
     if len(out) != len(nodes):
         return list(nodes)
     return out
+
+
+def _topo_levels(nodes: list[dict[str, Any]], edges: list[dict[str, str]]) -> list[list[dict[str, Any]]]:
+    """Bucket nodes into parallel execution levels (all predecessors satisfied per level)."""
+    by_id = {n["id"]: n for n in nodes}
+    preds: dict[str, list[str]] = {n["id"]: [] for n in nodes}
+    for e in edges:
+        f, t = e.get("from"), e.get("to")
+        if f and t and t in preds:
+            preds[t].append(f)
+    levels: list[list[dict[str, Any]]] = []
+    remaining = set(by_id.keys())
+    satisfied: set[str] = set()
+    while remaining:
+        level_ids = [nid for nid in remaining if not (set(preds[nid]) - satisfied)]
+        if not level_ids:
+            return [[by_id[nid] for nid in remaining]]
+        levels.append([by_id[nid] for nid in level_ids])
+        satisfied.update(level_ids)
+        remaining -= set(level_ids)
+    return levels
 
 
 def resolve_workflow_dag(
@@ -224,7 +246,7 @@ async def run_goal_pipeline(
         if a.role not in by_role:
             by_role[a.role] = a
 
-    ordered = _topo_ordered_nodes(nodes, edges)
+    levels = _topo_levels(nodes, edges)
     stages: list[dict[str, Any]] = []
     total_tokens = 0
     outputs_by_node: dict[str, dict[str, Any]] = {}
@@ -241,7 +263,7 @@ async def run_goal_pipeline(
 
     tid_task = str(task.id)
 
-    for node in ordered:
+    async def _run_one_node(node: dict[str, Any]) -> dict[str, Any]:
         node_id = node["id"]
         role = str(node.get("role", ""))
         task_type = str(node.get("task_type", "generic"))
@@ -249,8 +271,7 @@ async def run_goal_pipeline(
         pred_ids = pred_index.get(node_id, [])
 
         if agent is None:
-            stages.append({"node_id": node_id, "role": role, "skipped": True, "reason": "no_active_agent"})
-            continue
+            return {"node_id": node_id, "role": role, "skipped": True, "reason": "no_active_agent"}
 
         stub_in = _build_stage_input(
             role=role,
@@ -264,28 +285,37 @@ async def run_goal_pipeline(
         )
         stub = TaskStub(id=tid_task, type=task_type, input=stub_in)
         runner = _make_runner(agent)
+        r = await runner.run(stub)
+        return {
+            "node_id": node_id,
+            "role": role,
+            "task_type": task_type,
+            "agent_id": str(agent.id),
+            "agent_name": agent.name,
+            "output": r.output,
+            "tokens": r.token_used,
+        }
+
+    for level in levels:
         try:
-            r = await runner.run(stub)
-            entry = {
-                "node_id": node_id,
-                "role": role,
-                "task_type": task_type,
-                "agent_id": str(agent.id),
-                "agent_name": agent.name,
-                "output": r.output,
-                "tokens": r.token_used,
-            }
+            level_results = await asyncio.gather(*[_run_one_node(n) for n in level])
+        except Exception as exc:
+            return {"stages": stages, "error": str(exc)}, total_tokens, False, str(exc)
+
+        for entry in level_results:
             stages.append(entry)
-            total_tokens += r.token_used
+            if entry.get("skipped"):
+                continue
+            node_id = entry["node_id"]
+            total_tokens += int(entry.get("tokens") or 0)
             outputs_by_node[node_id] = entry
+            role = entry.get("role")
             if role == "hunter":
                 leads_acc = entry
             elif role == "researcher":
                 brief_acc = entry
             elif role == "outreach":
                 email_acc = entry
-        except Exception as exc:
-            return {"stages": stages, "error": str(exc)}, total_tokens, False, str(exc)
 
     ran_any = any("tokens" in s for s in stages)
     if not ran_any:
@@ -309,6 +339,7 @@ async def run_goal_pipeline(
 
     out: dict[str, Any] = {
         "collaborative": True,
+        "parallel_levels": len(levels),
         "workflow": wf_name,
         "workflow_index": wf_index,
         "industry_plugin": plugin_id,

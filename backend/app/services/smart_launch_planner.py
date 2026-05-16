@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from app.agents.discipline_harness import intent_gate_heuristic
 from app.industry_plugins import get_plugin
 from app.models.domain import Tenant
 from app.services.llm import complete_chat
@@ -19,6 +20,8 @@ class SmartLaunchPlan:
     workflow_name: Optional[str] = None
     coordinator_role: Optional[str] = None
     reasoning: str = ""
+    true_intent: str = ""
+    success_criteria: str = ""
 
 
 def _first_node_role(nodes: Any) -> Optional[str]:
@@ -39,12 +42,15 @@ async def plan_smart_launch(
 ) -> SmartLaunchPlan:
     """Use the configured LLM to pick execution mode; respect explicit workflow hints from the client."""
     goal = goal.strip()
+    intent = intent_gate_heuristic(goal)
     if user_workflow_name and user_workflow_name.strip():
         return SmartLaunchPlan(
             task_type="goal_pipeline",
             workflow_name=user_workflow_name.strip(),
             coordinator_role="manager",
             reasoning="Client specified workflow name — collaborative pipeline.",
+            true_intent=intent["true_intent"],
+            success_criteria=intent["success_criteria"],
         )
     if user_workflow_index is not None:
         return SmartLaunchPlan(
@@ -52,6 +58,8 @@ async def plan_smart_launch(
             workflow_index=int(user_workflow_index),
             coordinator_role="manager",
             reasoning="Client specified workflow index — collaborative pipeline.",
+            true_intent=intent["true_intent"],
+            success_criteria=intent["success_criteria"],
         )
 
     plugin = get_plugin(tenant.industry_plugin)
@@ -78,11 +86,19 @@ async def plan_smart_launch(
         "Rules:\n"
         "- Prefer goal_pipeline when the user wants multiple steps, end-to-end delivery, "
         "cross-functional collaboration, or the goal is broad/ambiguous.\n"
+        "- Prefer parallel_team when the user wants multiple agents working in parallel "
+        "(simultaneous research + outreach, parallel sub-tasks, team mode).\n"
         "- Prefer a single task_type only when the request is clearly one atomic deliverable.\n"
         "- Pick workflow_index by semantic fit with the goal.\n"
         f"Allowed task_type values: {allowed}.\n"
     )
-    user = f"User goal:\n{goal[:7000]}\n\nIndustry workflow templates:\n{catalog}\n"
+    user = (
+        f"User goal:\n{goal[:7000]}\n\n"
+        f"Intent gate (pre-analysis):\n"
+        f"- true_intent: {intent['true_intent']}\n"
+        f"- success_criteria: {intent['success_criteria']}\n\n"
+        f"Industry workflow templates:\n{catalog}\n"
+    )
 
     try:
         text, _ = await complete_chat(
@@ -130,6 +146,8 @@ async def plan_smart_launch(
             workflow_name=wn_s,
             coordinator_role=cr_s,
             reasoning=reason,
+            true_intent=intent["true_intent"],
+            success_criteria=intent["success_criteria"],
         )
     except Exception:
         fb = infer_task_type_from_goal(goal)
@@ -140,5 +158,12 @@ async def plan_smart_launch(
                 workflow_index=0,
                 coordinator_role=cr,
                 reasoning="Fallback: keyword router selected collaborative pipeline.",
+                true_intent=intent["true_intent"],
+                success_criteria=intent["success_criteria"],
             )
-        return SmartLaunchPlan(task_type=fb, reasoning="Fallback: keyword router.")
+        return SmartLaunchPlan(
+            task_type=fb,
+            reasoning="Fallback: keyword router.",
+            true_intent=intent["true_intent"],
+            success_criteria=intent["success_criteria"],
+        )

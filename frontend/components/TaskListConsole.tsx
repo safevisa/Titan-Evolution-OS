@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { apiUrl } from "@/lib/api-origin";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -85,6 +86,10 @@ export type TaskListLabels = {
   computerUseStatus?: string;
   computerUseArtifact?: string;
   workflowCapabilitiesLabel?: string;
+  ultraworkLabel?: string;
+  ultraworkHint?: string;
+  parallelTeamLabel?: string;
+  parallelTeamHint?: string;
 };
 
 const C = {
@@ -364,6 +369,7 @@ function GoalPipelineOutputBody({
 
 export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
   const { tenantId } = useAuth();
+  const searchParams = useSearchParams();
   const [statusFilter, setStatusFilter] = useState("all");
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [agents, setAgents] = useState<AgentRow[]>([]);
@@ -387,7 +393,16 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
   const [workflowNameOverride, setWorkflowNameOverride] = useState("");
   const [capabilityPacks, setCapabilityPacks] = useState<CapabilityPackRow[]>([]);
   const [capabilityPackId, setCapabilityPackId] = useState("");
+  const [ultrawork, setUltrawork] = useState(false);
+  const [parallelTeam, setParallelTeam] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (searchParams.get("harness") === "ultrawork") {
+      setUltrawork(true);
+      setCapabilityPackId("discipline_ultrawork");
+    }
+  }, [searchParams]);
 
   const loadTasks = useCallback(async () => {
     if (!tenantId) return;
@@ -544,12 +559,22 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
     setLiveLogs([]);
     addLog("🧭", labels.smartLaunchProgress ?? "Resolving task type and agent from your description…", C.accent);
     try {
-      if (capabilityPackId) await applySelectedPack();
+      const packForLaunch = parallelTeam
+        ? (capabilityPackId || "parallel_team")
+        : ultrawork
+          ? (capabilityPackId || "discipline_ultrawork")
+          : capabilityPackId;
+      if (packForLaunch) await applyPackById(packForLaunch);
       const wn = workflowNameOverride.trim();
       const body: Record<string, unknown> = { tenant_id: tenantId, goal: goal.trim() };
-      if (wn) body.workflow_name = wn;
-      else if (workflows.length > 0) body.workflow_index = workflowIndex;
+      if (parallelTeam) {
+        body.task_type = "parallel_team";
+      } else {
+        if (wn) body.workflow_name = wn;
+        else if (workflows.length > 0) body.workflow_index = workflowIndex;
+      }
       if (smartExecutorId) body.agent_id = smartExecutorId;
+      if (ultrawork) body.ultrawork = true;
 
       const createRes = await fetch(apiUrl("/api/v1/tasks/smart"), {
         method: "POST",
@@ -597,13 +622,18 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
     }
   };
 
-  const applySelectedPack = async () => {
-    if (!tenantId || !capabilityPackId) return;
+  const applyPackById = async (packId: string) => {
+    if (!tenantId || !packId) return;
     await fetch(apiUrl(`/api/v1/integrations/tenants/${tenantId}/grants/apply-pack`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pack_id: capabilityPackId, merge: true }),
+      body: JSON.stringify({ pack_id: packId, merge: true }),
     });
+  };
+
+  const applySelectedPack = async () => {
+    if (!capabilityPackId) return;
+    await applyPackById(capabilityPackId);
   };
 
   const launchTask = async () => {
@@ -612,10 +642,24 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
     setLiveLogs([]);
     addLog("🚀", `Creating ${taskTypeLabel(taskType)}…`, C.accent);
     try {
-      if (capabilityPackId) await applySelectedPack();
+      const effectiveType = parallelTeam ? "parallel_team" : taskType;
+      const packForLaunch = parallelTeam
+        ? (capabilityPackId || "parallel_team")
+        : ultrawork
+          ? (capabilityPackId || "discipline_ultrawork")
+          : capabilityPackId;
+      if (packForLaunch) await applyPackById(packForLaunch);
       const agent = agents.find(a => a.id === selectedAgent);
-      const input: Record<string, unknown> = { goal: goal.trim(), criteria: goal.trim() };
-      if (taskType === "goal_pipeline") {
+      const input: Record<string, unknown> = {
+        goal: goal.trim(),
+        criteria: goal.trim(),
+        auto_decompose: parallelTeam,
+      };
+      if (ultrawork) {
+        input.ultrawork = true;
+        input.harness_mode = "ultrawork";
+      }
+      if (effectiveType === "goal_pipeline") {
         const wn = workflowNameOverride.trim();
         if (wn) {
           input.workflow_name = wn;
@@ -626,7 +670,7 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
       const createRes = await fetch(apiUrl("/api/v1/tasks"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenant_id: tenantId, agent_id: selectedAgent, task_type: taskType, input }),
+        body: JSON.stringify({ tenant_id: tenantId, agent_id: selectedAgent, task_type: effectiveType, input }),
       });
       if (!createRes.ok) {
         const errText = await createRes.text();
@@ -699,6 +743,46 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
                 </select>
               </div>
             )}
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 12, color: C.textMid, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={parallelTeam}
+                onChange={e => {
+                  const on = e.target.checked;
+                  setParallelTeam(on);
+                  if (on) setCapabilityPackId("parallel_team");
+                }}
+                style={{ marginTop: 2 }}
+              />
+              <span>
+                <span style={{ color: C.text, fontWeight: 500 }}>{labels.parallelTeamLabel ?? "Parallel team"}</span>
+                {labels.parallelTeamHint ? (
+                  <span style={{ display: "block", fontSize: 11, color: C.textDim, marginTop: 4, lineHeight: 1.45 }}>
+                    {labels.parallelTeamHint}
+                  </span>
+                ) : null}
+              </span>
+            </label>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 12, color: C.textMid, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={ultrawork}
+                onChange={e => {
+                  const on = e.target.checked;
+                  setUltrawork(on);
+                  if (on) setCapabilityPackId("discipline_ultrawork");
+                }}
+                style={{ marginTop: 2 }}
+              />
+              <span>
+                <span style={{ color: C.text, fontWeight: 500 }}>{labels.ultraworkLabel ?? "Ultrawork mode"}</span>
+                {labels.ultraworkHint ? (
+                  <span style={{ display: "block", fontSize: 11, color: C.textDim, marginTop: 4, lineHeight: 1.45 }}>
+                    {labels.ultraworkHint}
+                  </span>
+                ) : null}
+              </span>
+            </label>
             <button type="button" onClick={launchSmartTask} disabled={launching || !goal.trim() || agents.length === 0} style={{ width: "100%", padding: "13px", borderRadius: 9, border: "none", cursor: agents.length === 0 ? "not-allowed" : "pointer", fontWeight: 600, fontSize: 14, background: launching || agents.length === 0 ? C.surfaceHigh : C.accent, color: launching || agents.length === 0 ? C.textMid : "#fff", transition: "all 0.18s" }}>
               {launching ? (labels.launching ?? "⏳ Running…") : (labels.smartLaunchButton ?? "🧭 Smart launch")}
             </button>

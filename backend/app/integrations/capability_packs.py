@@ -70,6 +70,41 @@ CAPABILITY_PACKS: tuple[CapabilityPack, ...] = (
         ),
         roles_hint=("delivery", "operations", "researcher"),
     ),
+    CapabilityPack(
+        id="discipline_ultrawork",
+        display_name="Discipline Ultrawork",
+        description=(
+            "Context sync + outreach + ops notify — persistent multi-tool execution "
+            "(omo-inspired harness bundle)."
+        ),
+        capability_refs=(
+            "context_sync_run@v1",
+            "apollo_search@v1",
+            "resend_email@v1",
+            "slack_post_message@v1",
+            "research_web_search@v1",
+            "research_docs_fetch@v1",
+        ),
+        roles_hint=("manager", "hunter", "outreach", "operations", "researcher"),
+    ),
+    CapabilityPack(
+        id="parallel_team",
+        display_name="Parallel Team",
+        description="Parallel sub-agents via Celery (omo Team Mode, M07a).",
+        capability_refs=(
+            "research_web_search@v1",
+            "research_docs_fetch@v1",
+            "context_sync_run@v1",
+        ),
+        roles_hint=("manager", "researcher", "hunter", "outreach", "delivery"),
+    ),
+    CapabilityPack(
+        id="research_assistant",
+        display_name="Research Assistant",
+        description="Web search + doc fetch for deep research roles (M07b).",
+        capability_refs=("research_web_search@v1", "research_docs_fetch@v1"),
+        roles_hint=("researcher", "manager", "strategy_director", "hunter", "bd"),
+    ),
 )
 
 

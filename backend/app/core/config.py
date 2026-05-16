@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     openrouter_api_key: Optional[str] = None
     xai_api_key: Optional[str] = None
     perplexityai_api_key: Optional[str] = None
+    exa_api_key: Optional[str] = None
     dashscope_api_key: Optional[str] = None
     moonshot_api_key: Optional[str] = None
     zhipuai_api_key: Optional[str] = None

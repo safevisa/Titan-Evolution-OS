@@ -6,6 +6,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.discipline_harness import project_context_block
 from app.context_sync.config_helpers import context_sync_enabled, inject_max_tokens
 from app.memory.context_retrieval import fetch_sync_context_block
 from app.memory.long_term import search_memories
@@ -45,6 +46,10 @@ async def build_enhanced_prompt(
     parts: list[str] = [base_prompt.strip()]
 
     tenant_row = await db.get(Tenant, uuid.UUID(tenant_id))
+    tenant_cfg = tenant_row.config if tenant_row and isinstance(tenant_row.config, dict) else None
+    ctx_block = project_context_block(tenant_cfg)
+    if ctx_block:
+        parts.append(ctx_block)
     if tenant_row and context_sync_enabled(tenant_row.config):
         sync_block = await fetch_sync_context_block(
             tenant_id=tenant_id,

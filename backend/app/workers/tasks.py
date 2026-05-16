@@ -104,6 +104,14 @@ async def _run_task(task_id: str) -> dict:
                 )
                 if not success and error_msg:
                     result_output = {**result_output, "error": error_msg}
+            elif task.task_type == "parallel_team":
+                from app.workers.parallel_team import run_parallel_team
+
+                result_output, token_used, success, error_msg = await run_parallel_team(
+                    db=db, task=task, coordinator=agent
+                )
+                if not success and error_msg:
+                    result_output = {**result_output, "error": error_msg}
             else:
                 if AgentClass is not None:
                     runner = AgentClass(
