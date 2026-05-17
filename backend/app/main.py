@@ -9,7 +9,15 @@ from app.api.v1.router import api_router
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    from app.core.config import settings
+    from app.mcp.host import get_mcp_host, servers_to_autostart
+
+    if settings.mcp_autostart:
+        host = get_mcp_host()
+        await host.start(servers_to_autostart())
     yield
+    if settings.mcp_autostart:
+        await get_mcp_host().stop()
 
 
 _DESCRIPTION = """
@@ -74,6 +82,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(api_router, prefix="/api/v1")
+
+from app.websocket import ws_router  # noqa: E402
+
+app.include_router(ws_router)
 
 
 @app.get("/health")

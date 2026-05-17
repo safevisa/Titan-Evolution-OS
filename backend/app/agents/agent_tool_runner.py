@@ -60,6 +60,21 @@ async def run_agent_with_capability_tools(
         connection_providers=connection_providers,
     )
     tools, name_to_ref = capabilities_to_openai_tools(caps, only_executable=True)
+
+    from app.core.config import settings as app_settings
+    from app.mcp.tool_bridge import (
+        execute_mcp_tool,
+        is_mcp_tool_name,
+        maybe_broadcast_tool_log,
+        openai_tools_for_role,
+    )
+
+    if app_settings.mcp_autostart:
+        mcp_tools, mcp_name_map = await openai_tools_for_role(role)
+        if mcp_tools:
+            tools = [*tools, *mcp_tools]
+            name_to_ref = {**name_to_ref, **mcp_name_map}
+
     if not tools:
         text, tokens = await complete_chat(messages)
         return text, tokens, []
@@ -83,6 +98,29 @@ async def run_agent_with_capability_tools(
                 args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args or {})
             except json.JSONDecodeError:
                 args = {}
+            if is_mcp_tool_name(name):
+                mcp_result = await execute_mcp_tool(name, args, name_to_ref)
+                ok = bool(mcp_result.get("ok"))
+                tool_results.append({"tool": name, "mcp": True, "result": mcp_result})
+                await maybe_broadcast_tool_log(
+                    task_id=correlation_id,
+                    role=role,
+                    safe_name=name,
+                    ok=ok,
+                )
+                tool_payload = compress_for_llm(
+                    json.dumps(mcp_result, ensure_ascii=False, default=str),
+                    max_chars=8000,
+                )
+                convo.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", name),
+                        "content": tool_payload,
+                    }
+                )
+                continue
+
             parsed = parse_capability_tool_call(name, args, name_to_ref=name_to_ref)
             if not parsed:
                 tool_results.append({"tool": name, "ok": False, "error": "unknown_tool"})

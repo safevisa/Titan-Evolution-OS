@@ -89,6 +89,13 @@ class Settings(BaseSettings):
     computer_use_artifact_dir: str = "/var/titan/cu-artifacts"
     # TEO-DUAL: OpenHuman sidecar JWT (M04).
     titan_sidecar_jwt_secret: Optional[str] = None
+    # MCP stdio servers (optional; complements capability catalog).
+    mcp_autostart: bool = True
+    brave_api_key: Optional[str] = None
+    github_token: Optional[str] = None
+    slack_bot_token: Optional[str] = None
+    slack_team_id: Optional[str] = None
+    notion_api_key: Optional[str] = None
 
 
 settings = Settings()

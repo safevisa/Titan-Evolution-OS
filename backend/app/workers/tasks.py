@@ -62,6 +62,20 @@ async def _run_task(task_id: str) -> dict:
         task.status = "running"
         await db.commit()
 
+        try:
+            from app.websocket import broadcast_task_log
+
+            await broadcast_task_log(
+                task_id,
+                {
+                    "level": "info",
+                    "message": f"Agent {agent.role} started ({task.task_type})",
+                    "agent": agent.role,
+                },
+            )
+        except Exception:
+            pass
+
         AgentClass = _ROLE_MAP.get(agent.role)
 
         start = time.time()
@@ -144,6 +158,24 @@ async def _run_task(task_id: str) -> dict:
         task.token_used = token_used
         task.duration_ms = elapsed_ms
         task.completed_at = datetime.now(tz=timezone.utc)
+
+        try:
+            from app.websocket import broadcast_task_log
+
+            await broadcast_task_log(
+                task_id,
+                {
+                    "level": "success" if success else "error",
+                    "message": (
+                        f"Task finished in {elapsed_ms}ms · {token_used} tokens"
+                        if success
+                        else f"Task failed: {(error_msg or 'error')[:200]}"
+                    ),
+                    "agent": agent.role,
+                },
+            )
+        except Exception:
+            pass
 
         out_dict: dict = result_output if isinstance(result_output, dict) else {}
         perf_extra = build_performance_log_extra(

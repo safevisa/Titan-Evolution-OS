@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { apiUrl } from "@/lib/api-origin";
+import { taskLogWsUrl } from "@/lib/ws-origin";
 import { useAuth } from "@/hooks/useAuth";
 
 export type TaskListLabels = {
@@ -396,6 +397,8 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
   const [ultrawork, setUltrawork] = useState(false);
   const [parallelTeam, setParallelTeam] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const wsPingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (searchParams.get("harness") === "ultrawork") {
@@ -455,6 +458,13 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
     }
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (wsPingRef.current) clearInterval(wsPingRef.current);
+      wsRef.current?.close();
+    };
+  }, []);
+
   useEffect(() => { loadTasks(); }, [loadTasks]);
   useEffect(() => { loadAgents(); }, [loadAgents]);
   useEffect(() => {
@@ -494,6 +504,36 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
     setLiveLogs(prev => [...prev, { time, icon, msg, color }]);
   };
 
+  const connectTaskWs = (taskId: string) => {
+    if (wsPingRef.current) clearInterval(wsPingRef.current);
+    wsRef.current?.close();
+    try {
+      const ws = new WebSocket(taskLogWsUrl(taskId));
+      wsRef.current = ws;
+      ws.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data) as { level?: string; message?: string };
+          if (!data.message) return;
+          const icon =
+            data.level === "success" ? "✅" : data.level === "error" ? "❌" : data.level === "tool" ? "🔧" : "ℹ️";
+          const color =
+            data.level === "success" ? C.green : data.level === "error" ? C.red : data.level === "tool" ? C.accent : C.textMid;
+          addLog(icon, String(data.message), color);
+        } catch {
+          /* ignore malformed frames */
+        }
+      };
+      wsPingRef.current = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send("ping");
+      }, 25000);
+      ws.onclose = () => {
+        if (wsPingRef.current) clearInterval(wsPingRef.current);
+      };
+    } catch {
+      /* WebSocket unavailable — polling still works */
+    }
+  };
+
   const afterTaskCreated = async (task: TaskRow, runnerLabel: string) => {
     addLog("✅", `Task created (ID: ${task.id.slice(0, 8)}…)`, C.green);
     addLog("⚡", `Memory layer: retrieving relevant past experiences…`, C.purple);
@@ -504,6 +544,7 @@ export function TaskListConsole({ labels }: { labels: TaskListLabels }) {
       return;
     }
     addLog("⏳", `${runnerLabel} is now running…`, C.amber);
+    connectTaskWs(task.id);
     let attempts = 0;
     const poll = setInterval(async () => {
       attempts++;

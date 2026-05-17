@@ -99,6 +99,12 @@ services:
       COMPUTER_USE_RUNNER_URL: ${COMPUTER_USE_RUNNER_URL:-http://computer-use-runner:8090}
       COMPUTER_USE_RUNNER_TOKEN: ${COMPUTER_USE_RUNNER_TOKEN:-dev-runner-token}
       EXA_API_KEY: ${EXA_API_KEY:-}
+      MCP_AUTOSTART: ${MCP_AUTOSTART:-true}
+      BRAVE_API_KEY: ${BRAVE_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_TEAM_ID: ${SLACK_TEAM_ID:-}
+      NOTION_API_KEY: ${NOTION_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -188,6 +194,12 @@ services:
       COMPUTER_USE_RUNNER_URL: ${COMPUTER_USE_RUNNER_URL:-http://computer-use-runner:8090}
       COMPUTER_USE_RUNNER_TOKEN: ${COMPUTER_USE_RUNNER_TOKEN:-dev-runner-token}
       EXA_API_KEY: ${EXA_API_KEY:-}
+      MCP_AUTOSTART: ${MCP_AUTOSTART:-true}
+      BRAVE_API_KEY: ${BRAVE_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_TEAM_ID: ${SLACK_TEAM_ID:-}
+      NOTION_API_KEY: ${NOTION_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
