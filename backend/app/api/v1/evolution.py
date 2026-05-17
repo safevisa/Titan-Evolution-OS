@@ -16,6 +16,17 @@ from app.models.domain import ABTest, Agent, PromptVersion, Task
 router = APIRouter(prefix="/evolution", tags=["evolution"])
 
 
+@router.get("/capability-radar")
+async def capability_radar(category: Optional[str] = None) -> dict:
+    """Market-discovered OSS/MCP/skill candidates for Titan's evolution loop."""
+    from app.evolution.capability_radar import list_radar_items, radar_summary
+
+    return {
+        "summary": radar_summary(category=category),
+        "items": list_radar_items(category=category),
+    }
+
+
 # ── Status ─────────────────────────────────────────────────────────────────
 
 @router.get("/status")

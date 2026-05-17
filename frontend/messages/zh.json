@@ -369,7 +369,26 @@
       "coldStartMode2": "成熟期（全自动）",
       "coldStartDetail0": "演进变更需人工确认",
       "coldStartDetail1": "可扩大自动提示优化范围",
-      "coldStartDetail2": "自动进化已全开"
+      "coldStartDetail2": "自动进化已全开",
+      "radarTitle": "能力进化雷达",
+      "radarSubtitle": "每日发现适合 Titan 进化的开源产品、MCP 与技能候选。",
+      "radarTop": "快照",
+      "radarStars": "星标",
+      "radarLicense": "许可证",
+      "radarFit": "适配度",
+      "radarAction": "建议动作",
+      "radarRisk": "风险",
+      "radarPath": "落地路径",
+      "radarEmpty": "当前筛选下暂无候选。",
+      "radarAll": "全部",
+      "radarMcp": "MCP",
+      "radarWorkflow": "工作流",
+      "radarSkills": "技能",
+      "radarDocs": "文档",
+      "radarSecurity": "安全运行时",
+      "radarCreateTask": "转成开发任务",
+      "radarLoading": "正在加载能力候选…",
+      "radarError": "能力进化雷达加载失败，请检查 API 服务后重试。"
     }
     ,
     "skillsPage": {

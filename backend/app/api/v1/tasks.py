@@ -103,9 +103,9 @@ async def list_tasks(
 
 
 class WorkflowNodeRead(BaseModel):
-    role: str | None = None
-    capability_id: str | None = None
-    label: str | None = None
+    role: Optional[str] = None
+    capability_id: Optional[str] = None
+    label: Optional[str] = None
 
 
 class WorkflowTemplateRead(BaseModel):
@@ -275,8 +275,8 @@ async def create_smart_task(body: SmartTaskCreate, db: AsyncSession = Depends(ge
         inp["harness_mode"] = body.harness_mode.strip().lower()
     if task_type == "parallel_team":
         inp["auto_decompose"] = True
-    wf_template_name: str | None = None
-    wf_idx_out: int | None = None
+    wf_template_name: Optional[str] = None
+    wf_idx_out: Optional[int] = None
     if task_type == "goal_pipeline":
         plugin = get_plugin(tenant_row.industry_plugin)
         tmpl_list = plugin.get_workflow_templates() if plugin else []
@@ -376,7 +376,7 @@ async def submit_feedback(
     res = await db.execute(
         select(PerformanceLog).where(PerformanceLog.task_id == task_id).limit(1)
     )
-    perf: PerformanceLog | None = res.scalars().first()
+    perf: Optional[PerformanceLog] = res.scalars().first()
     if perf is None:
         perf = PerformanceLog(
             tenant_id=task.tenant_id,

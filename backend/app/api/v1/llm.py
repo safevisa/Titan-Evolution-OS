@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException
 
@@ -9,7 +11,7 @@ router = APIRouter(prefix="/llm", tags=["llm"])
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
-    model: str | None = Field(default=None, max_length=200)
+    model: Optional[str] = Field(default=None, max_length=200)
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
 
 

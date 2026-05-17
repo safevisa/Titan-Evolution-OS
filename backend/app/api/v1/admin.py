@@ -1,6 +1,8 @@
 """Platform admin operations — protected by TITAN_ADMIN_API_KEY (header X-Titan-Admin-Key)."""
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +15,7 @@ from app.services.enterprise_roster_sync import sync_tenant_enterprise_roster
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-def _require_admin_key(x_titan_admin_key: str | None) -> None:
+def _require_admin_key(x_titan_admin_key: Optional[str]) -> None:
     expected = (settings.titan_admin_api_key or "").strip()
     if not expected:
         raise HTTPException(
@@ -27,7 +29,7 @@ def _require_admin_key(x_titan_admin_key: str | None) -> None:
 @router.post("/sync-all-enterprise-rosters")
 async def sync_all_enterprise_rosters(
     db: AsyncSession = Depends(get_db),
-    x_titan_admin_key: str | None = Header(default=None, alias="X-Titan-Admin-Key"),
+    x_titan_admin_key: Optional[str] = Header(default=None, alias="X-Titan-Admin-Key"),
 ) -> dict:
     """Run enterprise roster sync for every tenant (agents + skills)."""
     _require_admin_key(x_titan_admin_key)
@@ -56,7 +58,7 @@ async def sync_all_enterprise_rosters(
 @router.get("/tenants-overview")
 async def tenants_overview(
     db: AsyncSession = Depends(get_db),
-    x_titan_admin_key: str | None = Header(default=None, alias="X-Titan-Admin-Key"),
+    x_titan_admin_key: Optional[str] = Header(default=None, alias="X-Titan-Admin-Key"),
 ) -> list[dict]:
     """Lightweight tenant list for admin dashboards."""
     _require_admin_key(x_titan_admin_key)

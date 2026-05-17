@@ -43,6 +43,25 @@ export type EvolutionLabels = {
   coldStartDetail0: string;
   coldStartDetail1: string;
   coldStartDetail2: string;
+  radarTitle: string;
+  radarSubtitle: string;
+  radarTop: string;
+  radarStars: string;
+  radarLicense: string;
+  radarFit: string;
+  radarAction: string;
+  radarRisk: string;
+  radarPath: string;
+  radarEmpty: string;
+  radarAll: string;
+  radarMcp: string;
+  radarWorkflow: string;
+  radarSkills: string;
+  radarDocs: string;
+  radarSecurity: string;
+  radarCreateTask: string;
+  radarLoading: string;
+  radarError: string;
 };
 
 type AgentStat = {
@@ -73,6 +92,30 @@ type ABTest = {
   winner_id: string | null;
 };
 
+type CapabilityRadarItem = {
+  id: string;
+  name: string;
+  url: string;
+  category: string;
+  license: string;
+  stars: string;
+  maturity: string;
+  titan_fit_score: number;
+  recommended_action: string;
+  integration_path: string;
+  risk_note: string;
+  source_note: string;
+};
+
+type CapabilityRadarResponse = {
+  summary: {
+    version: string;
+    item_count: number;
+    integration_principles: string[];
+  };
+  items: CapabilityRadarItem[];
+};
+
 const ROLE_COLOR: Record<string, string> = {
   hunter: "bg-violet-900/50 text-violet-300",
   outreach: "bg-sky-900/50 text-sky-300",
@@ -101,6 +144,10 @@ export function EvolutionConsole({ labels }: { labels: EvolutionLabels }) {
   const [loading, setLoading] = useState(false);
   const [triggering, setTriggering] = useState<string | null>(null);
   const [concluding, setConcluding] = useState<string | null>(null);
+  const [radar, setRadar] = useState<CapabilityRadarResponse | null>(null);
+  const [radarFilter, setRadarFilter] = useState("all");
+  const [radarLoading, setRadarLoading] = useState(true);
+  const [radarError, setRadarError] = useState(false);
 
   const load = useCallback(async () => {
     if (!tenantId) return;
@@ -119,6 +166,29 @@ export function EvolutionConsole({ labels }: { labels: EvolutionLabels }) {
   }, [tenantId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRadarLoading(true);
+    setRadarError(false);
+    fetch(apiUrl("/api/v1/evolution/capability-radar"))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        if (data) {
+          setRadar(data);
+        } else {
+          setRadarError(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setRadarError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setRadarLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const trigger = async (agentId: string) => {
     setTriggering(agentId);
@@ -160,6 +230,19 @@ export function EvolutionConsole({ labels }: { labels: EvolutionLabels }) {
   const phase = completedTasks < COLD_START_TARGET ? 0 : completedTasks < 500 ? 1 : 2;
   const phaseLabels = [labels.coldStartMode0, labels.coldStartMode1, labels.coldStartMode2];
   const phaseDetails = [labels.coldStartDetail0, labels.coldStartDetail1, labels.coldStartDetail2];
+  const radarFilters = [
+    { id: "all", label: labels.radarAll },
+    { id: "mcp", label: labels.radarMcp },
+    { id: "workflow", label: labels.radarWorkflow },
+    { id: "skills", label: labels.radarSkills },
+    { id: "docs", label: labels.radarDocs },
+    { id: "security-runtime", label: labels.radarSecurity },
+  ];
+  const radarItems = radar?.items.filter((item) => {
+    if (radarFilter === "all") return true;
+    if (radarFilter === "skills") return item.category.includes("skills");
+    return item.category.includes(radarFilter);
+  }) ?? [];
 
   return (
     <div className="space-y-8">
@@ -203,6 +286,85 @@ export function EvolutionConsole({ labels }: { labels: EvolutionLabels }) {
           {labels.coldStartFootnote.replace("{s}", String(totalPerfSamples))}
         </p>
       </div>
+
+      <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-zinc-200">{labels.radarTitle}</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              {labels.radarSubtitle}
+              {radar?.summary.version ? ` ${labels.radarTop}: ${radar.summary.version}` : ""}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {radarFilters.map((filter) => (
+              <button
+                key={filter.id}
+                onClick={() => setRadarFilter(filter.id)}
+                className={`rounded px-2.5 py-1 text-[11px] ${
+                  radarFilter === filter.id
+                    ? "bg-emerald-600 text-white"
+                    : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800"
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {radarLoading ? (
+          <p className="text-xs text-zinc-500">{labels.radarLoading}</p>
+        ) : radarError ? (
+          <p className="text-xs text-red-300">{labels.radarError}</p>
+        ) : radarItems.length === 0 ? (
+          <p className="text-xs text-zinc-500">{labels.radarEmpty}</p>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2">
+            {radarItems.slice(0, 6).map((item) => (
+              <article key={item.id} className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <div>
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm font-semibold text-white hover:text-emerald-300"
+                    >
+                      {item.name}
+                    </a>
+                    <p className="mt-1 text-[11px] text-zinc-500">{item.category} · {item.maturity}</p>
+                  </div>
+                  <span className="rounded bg-zinc-800 px-2 py-1 text-[11px] font-mono text-emerald-300">
+                    {(item.titan_fit_score * 100).toFixed(0)}
+                  </span>
+                </div>
+                <div className="mb-2 flex flex-wrap gap-2 text-[11px] text-zinc-400">
+                  <span>{labels.radarStars}: {item.stars}</span>
+                  <span>{labels.radarLicense}: {item.license}</span>
+                  <span>{labels.radarFit}: {item.titan_fit_score.toFixed(2)}</span>
+                </div>
+                <p className="text-xs text-zinc-300">
+                  <span className="text-zinc-500">{labels.radarAction}: </span>{item.recommended_action}
+                </p>
+                <p className="mt-2 text-xs text-zinc-400">
+                  <span className="text-zinc-500">{labels.radarPath}: </span>{item.integration_path}
+                </p>
+                <p className="mt-2 text-[11px] text-amber-300/80">
+                  {labels.radarRisk}: {item.risk_note}
+                </p>
+                <button
+                  disabled
+                  className="mt-3 rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-500"
+                  title={labels.radarCreateTask}
+                >
+                  {labels.radarCreateTask}
+                </button>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* overview cards */}
       {evStatus && (

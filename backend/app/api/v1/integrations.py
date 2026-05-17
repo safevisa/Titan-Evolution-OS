@@ -1,7 +1,7 @@
 """External capability catalog, per-tenant grants, webhook connections, and OAuth."""
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -122,9 +122,9 @@ class ApplyCapabilityPackBody(BaseModel):
 class ExecuteCapabilityBody(BaseModel):
     capability_id: str = Field(..., min_length=2, max_length=160)
     params: dict[str, Any] = Field(default_factory=dict)
-    idempotency_key: str | None = Field(default=None, max_length=160)
-    correlation_id: str | None = Field(default=None, max_length=128)
-    actor: str | None = Field(default=None, max_length=256)
+    idempotency_key: Optional[str] = Field(default=None, max_length=160)
+    correlation_id: Optional[str] = Field(default=None, max_length=128)
+    actor: Optional[str] = Field(default=None, max_length=256)
 
 
 @router.get("/capabilities")
@@ -163,7 +163,7 @@ async def list_agent_role_capabilities(
 
 @router.get("/capability-packs")
 async def list_capability_packs_http(
-    role: str | None = Query(default=None, max_length=64),
+    role: Optional[str] = Query(default=None, max_length=64),
 ) -> list[dict[str, Any]]:
     return list_capability_packs(role=role)
 
@@ -185,8 +185,8 @@ async def get_capability_pack_http(pack_id: str) -> dict[str, Any]:
 @router.get("/tenants/{tenant_id}/capability-usage")
 async def get_capability_usage_http(
     tenant_id: UUID,
-    year: int | None = Query(default=None, ge=2020, le=2100),
-    month: int | None = Query(default=None, ge=1, le=12),
+    year: Optional[int] = Query(default=None, ge=2020, le=2100),
+    month: Optional[int] = Query(default=None, ge=1, le=12),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     if await db.get(Tenant, tenant_id) is None:
@@ -903,7 +903,7 @@ async def tenant_sync_status(
 
 
 class SyncTriggerBody(BaseModel):
-    sources: list[str] | None = Field(
+    sources: Optional[list[str]] = Field(
         default=None,
         description="Optional subset: gmail, gcal, github",
     )
@@ -912,7 +912,7 @@ class SyncTriggerBody(BaseModel):
 @router.post("/tenants/{tenant_id}/sync/trigger")
 async def tenant_sync_trigger(
     tenant_id: UUID,
-    body: SyncTriggerBody | None = None,
+    body: Optional[SyncTriggerBody] = None,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     if await db.get(Tenant, tenant_id) is None:

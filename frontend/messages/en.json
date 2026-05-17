@@ -368,7 +368,26 @@
       "coldStartMode2": "Mature (fully automatic)",
       "coldStartDetail0": "Evolution changes require human confirmation",
       "coldStartDetail1": "Eligible for broader automatic prompt tuning",
-      "coldStartDetail2": "Fully automatic evolution"
+      "coldStartDetail2": "Fully automatic evolution",
+      "radarTitle": "Capability Radar",
+      "radarSubtitle": "Daily OSS, MCP, and skill candidates for Titan evolution.",
+      "radarTop": "snapshot",
+      "radarStars": "stars",
+      "radarLicense": "license",
+      "radarFit": "fit",
+      "radarAction": "action",
+      "radarRisk": "risk",
+      "radarPath": "path",
+      "radarEmpty": "No candidates for this filter.",
+      "radarAll": "All",
+      "radarMcp": "MCP",
+      "radarWorkflow": "Workflow",
+      "radarSkills": "Skills",
+      "radarDocs": "Docs",
+      "radarSecurity": "Security runtime",
+      "radarCreateTask": "Create dev task",
+      "radarLoading": "Loading capability candidates…",
+      "radarError": "Capability Radar failed to load. Check the API service and try again."
     }
     ,
     "skillsPage": {
