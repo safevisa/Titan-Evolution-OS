@@ -1,0 +1,117 @@
+# Sales Outreach Plugin Template
+# Titan Evolution OS — Industry Plugin for B2B Sales Automation
+# Version: 0.1.0 (stub, not production-validated)
+# License: MIT (template only; no third-party code)
+
+# This YAML defines a workflow DAG for sales outreach automation.
+# It is designed to be executed via Titan's execute_capability("workflow_run").
+# All steps are stubs and must be implemented as Titan capability handlers.
+
+id: sales_outreach_v1
+name: "B2B Sales Outreach Pipeline"
+description: "Multi-step sales outreach: lead research, enrichment, personalized messaging, CRM sync, follow-up scheduling."
+version: "0.1.0"
+category: sales
+tags: [b2b, outreach, crm, lead-gen, email]
+
+# ── Agent Roles ──────────────────────────────────────────────────────────
+agents:
+  researcher:
+    role: researcher
+    description: "Research target accounts and contacts using web data and CRM history."
+    capabilities:
+      - web_search
+      - context_sync_run  # if CRM/Gmail connected
+      - memory_search_context
+  outreach_writer:
+    role: outreach_agent
+    description: "Draft personalized outreach messages based on research."
+    capabilities:
+      - llm_generate
+      - gmail_send  # stub, requires Phase 2
+  manager:
+    role: manager_agent
+    description: "Quality review and approval gate before sending."
+    capabilities:
+      - task_review
+      - workflow_decision
+
+# ── Workflow Steps ───────────────────────────────────────────────────────
+steps:
+  - id: lead_discovery
+    name: "Discover target leads"
+    agent: researcher
+    action: "Search and compile lead list from CRM pipeline or web sources."
+    input:
+      icp_criteria: "{{ trigger.icp_criteria }}"
+      max_leads: 20
+    output:
+      - leads_json
+
+  - id: lead_enrichment
+    name: "Enrich lead profiles"
+    agent: researcher
+    depends_on: [lead_discovery]
+    action: "For each lead, gather company info, recent news, decision-maker details."
+    input:
+      leads: "{{ steps.lead_discovery.output.leads_json }}"
+    output:
+      - enriched_leads_json
+
+  - id: draft_messages
+    name: "Draft personalized outreach"
+    agent: outreach_writer
+    depends_on: [lead_enrichment]
+    action: "Generate personalized email/LinkedIn message drafts per lead."
+    input:
+      enriched_leads: "{{ steps.lead_enrichment.output.enriched_leads_json }}"
+      tone: "{{ trigger.outreach_tone | default('professional and warm') }}"
+    output:
+      - drafts_json
+
+  - id: quality_review
+    name: "Manager reviews drafts"
+    agent: manager
+    depends_on: [draft_messages]
+    action: "Review drafts for quality, personalization, and policy compliance."
+    input:
+      drafts: "{{ steps.draft_messages.output.drafts_json }}"
+    output:
+      - approved_drafts_json
+      - flagged_drafts_json
+    config:
+      require_human_approval: true  # safety gate
+
+  - id: crm_sync
+    name: "Sync to CRM"
+    agent: researcher
+    depends_on: [quality_review]
+    action: "Log outreach activities and update lead status in connected CRM."
+    input:
+      approved: "{{ steps.quality_review.output.approved_drafts_json }}"
+      crm_provider: "{{ trigger.crm_provider | default('hubspot') }}"
+
+  - id: schedule_followups
+    name: "Schedule follow-up tasks"
+    agent: manager
+    depends_on: [crm_sync]
+    action: "Create follow-up tasks in Titan for unresponsive leads."
+    input:
+      responded_leads: "{{ steps.crm_sync.output.response_status }}"
+      followup_delay_days: "{{ trigger.followup_delay_days | default(3) }}"
+
+# ── Trigger Configuration ────────────────────────────────────────────────
+triggers:
+  - type: manual
+    description: "User manually starts an outreach campaign."
+  - type: schedule
+    description: "Scheduled via Celery Beat (e.g., weekly account review)."
+    cron: "0 9 * * 1"  # placeholder: Monday 9 AM
+
+# ── Tenant Configuration ─────────────────────────────────────────────────
+tenant_config:
+  context_sync:
+    enabled: true  # requires Gmail + CRM connection for enrichment
+  computer_use:
+    enabled: false
+  plan_required: business

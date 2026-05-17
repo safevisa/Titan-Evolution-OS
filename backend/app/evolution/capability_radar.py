@@ -128,6 +128,149 @@ RADAR_ITEMS: tuple[CapabilityRadarItem, ...] = (
         risk_note="GitHub reports an unknown license file; legal review required before copying any code.",
         source_note="Gateway, registry, and proxy in front of MCP, A2A, REST, and gRPC APIs.",
     ),
+    # ── 2026-05-17 daily scan additions ────────────────────────────────────
+    CapabilityRadarItem(
+        id="browser_use",
+        name="Browser Use",
+        url="https://github.com/browser-use/browser-use",
+        category="browser-automation",
+        license="MIT",
+        stars="90k",
+        maturity="production-proven (v0.12), WebVoyager 89.1%",
+        titan_fit_score=0.94,
+        recommended_action="evaluate_as_computer_use_backend",
+        integration_path=(
+            "Add as optional second backend in computer-use-runner alongside Agent-S. "
+            "CDP-based (no Playwright), 2x faster, 50% fewer tokens. "
+            "Wire via capability param engine=browseruse."
+        ),
+        risk_note="Requires Chrome/Chromium in sandbox; evaluate interoperability with existing Agent-S/UI-TARS pipeline.",
+        source_note="Highest-starred browser automation agent; CDP-native, self-healing, cloud browser service for CAPTCHA.",
+    ),
+    CapabilityRadarItem(
+        id="openviking",
+        name="OpenViking",
+        url="https://github.com/volcengine/OpenViking",
+        category="memory/context",
+        license="Apache-2.0",
+        stars="21.7k",
+        maturity="fast-growing (228 stars/day), v0.2.x series",
+        titan_fit_score=0.91,
+        recommended_action="study_for_memory_tree_architecture",
+        integration_path=(
+            "Adopt AGFS filesystem paradigm (L0 working / L1 project / L2 long-term) "
+            "for Titan Memory Tree tiered loading design. "
+            "83% token savings via hierarchical context injection. "
+            "Visual retrieval traces align with Titan audit requirements."
+        ),
+        risk_note="C++/Go dependencies for AGFS; prefer pattern adoption over runtime embedding for now.",
+        source_note="ByteDance/Volcengine context database; filesystem paradigm replaces flat RAG; self-evolving agents.",
+    ),
+    CapabilityRadarItem(
+        id="openclaw",
+        name="OpenClaw",
+        url="https://github.com/serif-ai/openclaw",
+        category="industry/sales",
+        license="to-be-confirmed",
+        stars="150k+",
+        maturity="production-deployed sales automation",
+        titan_fit_score=0.89,
+        recommended_action="convert_to_sales_plugin_template",
+        integration_path=(
+            "Extract 10 sales workflow patterns (lead research, pipeline reporting, "
+            "competitive intelligence, meeting prep) as Titan industry plugin templates. "
+            "Do NOT copy code; abstract patterns into workflow.yaml + agent_roles.yaml + SkillDocs."
+        ),
+        risk_note="License unconfirmed — do not copy any code until license is verified. GPL would restrict to sidecar-only reference.",
+        source_note="AI sales operations agent; model-agnostic, self-hosted, cron-scheduled; 10 major sales workflows.",
+    ),
+    CapabilityRadarItem(
+        id="statewave",
+        name="Statewave",
+        url="https://github.com/smaramwbc/statewave",
+        category="memory/runtime",
+        license="to-be-confirmed",
+        stars="new (v0.7.1)",
+        maturity="early-stage, actively developed",
+        titan_fit_score=0.86,
+        recommended_action="study_episodes_and_scoring",
+        integration_path=(
+            "Reference durable episode model, ranked retrieval (semantic + recency + relevance + temporal), "
+            "token budget management, and customer health scoring (0-100) for Titan Memory Tree and Delivery agent."
+        ),
+        risk_note="Very new project; community validation thin. Architecture patterns are the primary value today.",
+        source_note="Postgres+pgvector memory runtime; durable episodes, compiled memories, support-agent focused.",
+    ),
+    CapabilityRadarItem(
+        id="ui_tars_desktop",
+        name="UI-TARS Desktop",
+        url="https://github.com/bytedance/UI-TARS-desktop",
+        category="computer-use/grounding",
+        license="Apache-2.0",
+        stars="27k",
+        maturity="production-proven (ByteDance internal)",
+        titan_fit_score=0.92,
+        recommended_action="integrate_as_grounding_model",
+        integration_path=(
+            "Already referenced in Titan product plan as grounding model candidate. "
+            "Pure vision-driven (no DOM/API dependency), cross-platform. "
+            "Evaluate as replacement or alternative to current UI-TARS-1.5-7B endpoint."
+        ),
+        risk_note="Vision model inference cost; GPU requirement for local hosting. HF endpoint recommended for MVP.",
+        source_note="ByteDance pure-vision GUI agent; powers Doubao mobile; desktop + CLI + MCP modes; offline-capable.",
+    ),
+    CapabilityRadarItem(
+        id="deerflow",
+        name="DeerFlow 2.0",
+        url="https://github.com/bytedance/deer-flow",
+        category="agent-framework",
+        license="Apache-2.0",
+        stars="46k+",
+        maturity="rapidly growing, LangGraph-based",
+        titan_fit_score=0.87,
+        recommended_action="study_sandbox_orchestration",
+        integration_path=(
+            "Reference sandboxed execution runtime pattern: Docker per task, "
+            "sub-agent orchestration, long-term memory, skill system, MCP server support. "
+            "Aligns with Titan Computer Use Runner + Celery task model."
+        ),
+        risk_note="Heavy LangChain dependency; ByteDance maintenance continuity uncertain. Use as architecture reference only.",
+        source_note="ByteDance super-agent runtime; #1 GitHub Trending on release; Telegram/Slack/Lark integrations.",
+    ),
+    CapabilityRadarItem(
+        id="tooltrim",
+        name="Tooltrim",
+        url="https://github.com/tooltrim/tooltrim",
+        category="mcp/optimization",
+        license="to-be-confirmed",
+        stars="new",
+        maturity="early-stage MCP proxy",
+        titan_fit_score=0.84,
+        recommended_action="evaluate_for_mcp_layer",
+        integration_path=(
+            "MCP proxy that filters and compresses tool lists across servers, reducing context bloat by 70-93% "
+            "with ~3.7ms overhead. Directly applicable to Titan's MCP gateway layer for multi-MCP scenarios."
+        ),
+        risk_note="Early project; evaluate stability and license before any integration.",
+        source_note="Lightweight MCP proxy for tool list optimization; context-window-aware filtering and tracing.",
+    ),
+    CapabilityRadarItem(
+        id="nocobase",
+        name="NocoBase",
+        url="https://github.com/nocobase/nocobase",
+        category="platform/ai-employees",
+        license="Apache-2.0",
+        stars="21.7k",
+        maturity="production-deployed, 100+ contributors",
+        titan_fit_score=0.83,
+        recommended_action="study_ai_employee_ux",
+        integration_path=(
+            "Reference AI digital employee embedding pattern: Scout (sales intel), Viz (insights), "
+            "Ellis (email), Dex (data), Lexi (i18n). Apply to Titan's agent role design and UX onboarding."
+        ),
+        risk_note="No-code platform focus differs from Titan's developer-OS positioning; patterns transfer, code does not.",
+        source_note="Apache-2.0 no-code platform with AI employees deeply embedded in business processes; CRM 2.0.",
+    ),
 )
 
 
